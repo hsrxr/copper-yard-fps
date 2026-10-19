@@ -202,6 +202,68 @@ test('heavy torso protection is directional rather than an enlarged health pool'
   assert.equal(front.squad.getTargets()[0].maxHp, 100);
 });
 
+test('rear heavy knife executes every archetype and hit zone even with zero base damage', () => {
+  for (const difficulty of ['standard', 'hard']) for (const type of ['scout', 'rifle', 'heavy']) for (const zone of ['head', 'upper', 'legs']) for (const amount of [0, 1]) {
+    const f = fixture(); f.squad.setThreat({ difficulty }); f.spawn([{ x: 0, z: 0, type, yaw: 0 }]);
+    const before = f.squad.getTargets()[0];
+    const meta = { kind: 'knife', mode: 'heavy', origin: { x: 0, y: 1.7, z: -2 }, direction: { x: 0, y: 0, z: 1 } };
+    const result = f.squad.damage(before.id, zone, amount, meta);
+    assert.equal(result.killed, true, `${difficulty} ${type} ${zone} amount=${amount}`);
+    assert.equal(result.backstab, true); assert.equal(result.hp, 0); assert.equal(result.damage, before.hp);
+    assert.equal(result.armorHit, false); assert.equal(result.armorBreak, false);
+    assert.equal(f.squad.stats().corpses, 1); assert.deepEqual(f.events.kills, [before.id]);
+    assert.equal(f.squad.damage(before.id, zone, amount, meta).hit, false, 'dead target cannot pay a second kill');
+    assert.equal(f.squad.stats().kills, 1); assert.equal(f.events.kills.length, 1);
+  }
+});
+
+test('backstab uses the attacker position and the rear cone for every enemy heading', () => {
+  for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) for (const [angle, expected] of [[0, true], [Math.PI / 3 - .001, true], [Math.PI / 3 + .001, false], [Math.PI / 2, false], [Math.PI, false]]) {
+    const f = fixture(); f.spawn([{ x: 7, z: -4, type: 'rifle', yaw }]);
+    const origin = { x: 7 - Math.sin(yaw + angle) * 2, y: 1.7, z: -4 - Math.cos(yaw + angle) * 2 };
+    // Deliberately contradictory ray direction: location, not fan-ray direction, owns backstab eligibility.
+    const result = f.squad.damage(1, 'upper', 1, { kind: 'knife', mode: 'heavy', origin, direction: { x: 1, y: 0, z: 1 } });
+    assert.equal(result.killed, expected, `yaw ${yaw}, rear angle ${angle}`);
+    assert.equal(result.backstab, expected); assert.equal(result.hp, expected ? 0 : 99);
+  }
+});
+
+test('front heavy attacks and rear light attacks or bullets retain normal damage and helmet behavior', () => {
+  const cases = [
+    { kind: 'knife', mode: 'heavy', origin: { x: 0, y: 1.7, z: 2 }, zone: 'head', amount: 435, hp: 100, armor: true },
+    { kind: 'knife', mode: 'heavy', origin: { x: 0, y: 1.7, z: 2 }, zone: 'upper', amount: 145, hp: 34.75, armor: true },
+    { kind: 'knife', mode: 'light', origin: { x: 0, y: 1.7, z: -2 }, zone: 'upper', amount: 80, hp: 20, armor: false },
+    { kind: 'knife', mode: 'light', origin: { x: 0, y: 1.7, z: -2 }, zone: 'head', amount: 240, hp: 100, armor: true },
+    { kind: 'rifle', mode: 'heavy', origin: { x: 0, y: 1.7, z: -2 }, zone: 'head', amount: 120, hp: 100, armor: true }
+  ];
+  for (const c of cases) {
+    const f = fixture(); f.spawn([{ x: 0, z: 0, type: 'heavy', yaw: 0 }]);
+    const result = f.squad.damage(1, c.zone, c.amount, { ...c, direction: { x: 0, y: 0, z: -Math.sign(c.origin.z) } });
+    assert.equal(result.backstab, false); assert.equal(result.killed, false); assert.equal(result.hp, c.hp); assert.equal(result.armorHit, c.armor);
+  }
+});
+
+test('a defender that turns during the approach is evaluated at contact, not its spawn heading', () => {
+  const f = fixture(); f.player.position.set(0, 1.7, -2); f.spawn();
+  f.squad.hearPlayerShot(f.player.position); f.advance(.6);
+  const defender = f.squad.getTargets()[0];
+  assert.ok(Math.cos(defender.yaw) < -.5, 'defender has turned to face the attacker');
+  const result = f.squad.damage(1, 'upper', 1, { kind: 'knife', mode: 'heavy', origin: f.player.position.clone() });
+  assert.equal(result.backstab, false); assert.equal(result.killed, false); assert.equal(result.damage, 1);
+});
+
+test('missing, malformed or coincident attacker positions cannot grant an execution', () => {
+  for (const origin of [undefined, { x: 0, y: 1.7, z: 0 }, { x: NaN, y: 1.7, z: -2 }, { x: 0, y: Infinity, z: -2 }, { x: 0, y: 1.7, z: -Infinity }]) {
+    const f = fixture(); f.spawn(); const result = f.squad.damage(1, 'upper', 1, { kind: 'knife', mode: 'heavy', origin });
+    assert.equal(result.backstab, false); assert.equal(result.killed, false); assert.equal(result.hp, 99);
+  }
+  for (const amount of [NaN, Infinity, -1]) {
+    const f = fixture(); f.spawn();
+    const result = f.squad.damage(1, 'upper', amount, { kind: 'knife', mode: 'heavy', origin: { x: 0, y: 1.7, z: -2 } });
+    assert.equal(result.hit, false); assert.equal(f.squad.getTargets()[0].hp, 100); assert.equal(f.events.kills.length, 0);
+  }
+});
+
 test('death removes attacks and hit targets immediately but presents a bounded directional fall', () => {
   const f = fixture(); f.spawn(); f.advance(.8);
   const before = f.events.shots.length;

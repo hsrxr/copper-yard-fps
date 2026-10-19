@@ -123,7 +123,7 @@
     if(!result.hit)return null;
     const kind=result.armorBreak?'armorBreak':result.armorHit?'armor':hit.zone==='head'?(result.killed?'headshotKill':'headshot'):(result.killed?'kill':'hit');
     shotEnd.set(hit.point.x,hit.point.y,hit.point.z);effects.impact(shotEnd,true,kind);
-    ui.combatFeedback({kind,damage:result.damage,enemyName:FPSRules.ENEMY_TYPES[result.type]?.name||'敌人',points:combat.score-scoreBefore});audio.feedback(kind);
+    ui.combatFeedback({kind,backstab:result.backstab===true,damage:result.damage,enemyName:FPSRules.ENEMY_TYPES[result.type]?.name||'敌人',points:combat.score-scoreBefore});audio.feedback(kind);
     return result;
   }
   function recordAttack(weapon,hit,result){if(weapon.kind!=='knife'){runStats.shots++;if(result?.hit)runStats.hits++;}career.attack({slot:weapon.slot,hit:!!result?.hit,zone:hit?.zone,killed:!!result?.killed,type:result?.type});syncCareer();}

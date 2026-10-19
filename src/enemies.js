@@ -876,15 +876,28 @@
 
     function damage(id, zone, amount, metadata) {
       const e = pool.find(enemy => enemy.id === id && enemy.alive);
-      if (!e || !Number.isFinite(amount) || amount <= 0) return { hit: false, killed: false };
+      if (!e || !Number.isFinite(amount) || amount < 0) return { hit: false, killed: false };
+      const heavyKnife = !!metadata && metadata.kind === 'knife' && metadata.mode === 'heavy';
+      const origin = metadata && metadata.origin;
+      const validOrigin = origin && [origin.x, origin.y, origin.z].every(Number.isFinite);
+      let backstab = false;
+      if (heavyKnife && validOrigin) {
+        // The host already confirmed range and cover at blade contact. Use the
+        // current attacker location and defender facing, never the press-time
+        // pose or the direction of one ray in the knife's small hit fan.
+        const dx = origin.x - e.position.x, dz = origin.z - e.position.z, distance = Math.hypot(dx, dz);
+        // Rear 120-degree cone: within 60 degrees either side of straight back.
+        backstab = distance > 1e-6 && (dx * Math.sin(e.yaw) + dz * Math.cos(e.yaw)) / distance <= -.5 + 1e-9;
+      }
+      if (amount === 0 && !backstab) return { hit: false, killed: false };
       let armorHit = false, armorBreak = false;
       const impact = metadata && metadata.direction;
-      if (tactical && metadata && metadata.origin && [metadata.origin.x, metadata.origin.y, metadata.origin.z].every(Number.isFinite)) {
+      if (tactical && validOrigin) {
         // Deliver the contact before damage/death so a first lethal hit still alerts
         // the victim's local team, including at ranges beyond ordinary hearing.
-        contact(e, metadata.origin, 'damage'); shareContact(e, e.lastSeen);
+        contact(e, origin, 'damage'); shareContact(e, e.lastSeen);
       } else if (tactical) { e.goalPending = true; e.decision = 0; }
-      if (tactical && e.type === 'heavy') {
+      if (!backstab && tactical && e.type === 'heavy') {
         if (zone === 'head' && e.helmet) {
           e.helmet = false; armorHit = armorBreak = true; amount = 0;
         } else if (zone === 'upper' && impact && Number.isFinite(impact.x) && Number.isFinite(impact.z)) {
@@ -894,9 +907,10 @@
           if (facing > .45) { amount *= .45; armorHit = true; }
         }
       }
-      const dealt = Math.min(e.hp, amount);
-      e.hp = Math.max(0, e.hp - amount); e.hitFlash = .17;
-      const heavyKnife = metadata && metadata.kind === 'knife' && metadata.mode === 'heavy';
+      // An execution is a death decision, independent of base damage or zone
+      // multipliers. Still report actual HP removed and use the one death path.
+      const dealt = backstab ? e.hp : Math.min(e.hp, amount);
+      e.hp = backstab ? 0 : Math.max(0, e.hp - amount); e.hitFlash = .17;
       if (heavyKnife && e.heavyImmune <= 0) {
         e.stun = .26; e.heavyImmune = .8; e.interruptImmune = .8;
       } else if (!heavyKnife && e.interruptImmune <= 0) {
@@ -919,7 +933,7 @@
         if (ctx.onKill) ctx.onKill(e, zone);
       } else if (tactical) { renderEnemy(e); upload(); }
       return { hit: true, killed: killed, id: e.id, type: e.type, zone: zone, damage: dealt, hp: e.hp, maxHp: e.maxHp,
-        armorHit: armorHit, armorBreak: armorBreak };
+        armorHit: armorHit, armorBreak: armorBreak, backstab: backstab };
     }
 
     function stats() {

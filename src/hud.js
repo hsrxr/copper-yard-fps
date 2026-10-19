@@ -159,19 +159,19 @@
     }
     function renderFeed(){
       const now=performance.now();for(let i=killFeed.length-1;i>=0;i--)if(killFeed[i].expiresAt<=now)killFeed.splice(i,1);
-      for(let i=0;i<4;i++){const node=nodes['killFeed'+i],entry=killFeed[i];node.hidden=!entry;if(entry){node.textContent=(entry.kind==='headshotKill'?'◆ 爆头击杀':'✕ 击杀')+' · '+entry.enemyName+(entry.points>0?'  +'+entry.points:'');node.classList.toggle('head',entry.kind==='headshotKill');}}
+      for(let i=0;i<4;i++){const node=nodes['killFeed'+i],entry=killFeed[i];node.hidden=!entry;if(entry){node.textContent=(entry.backstab?'✕ 背刺击杀':entry.kind==='headshotKill'?'◆ 爆头击杀':'✕ 击杀')+' · '+entry.enemyName+(entry.points>0?'  +'+entry.points:'');node.classList.toggle('head',entry.kind==='headshotKill');}}
       clearTimeout(timers.feed);if(killFeed.length)later('feed',renderFeed,Math.max(16,Math.min(...killFeed.map(item=>item.expiresAt))-now));
     }
     function combatFeedback(event={}){
       const priority={hit:1,body:1,armor:1,armorBreak:2,headshot:2,kill:3,headshotKill:4},kind=priority[event.kind]?event.kind:'hit',now=performance.now(),isKill=kind==='kill'||kind==='headshotKill',head=kind==='headshot'||kind==='headshotKill',armor=kind==='armor'||kind==='armorBreak';
-      const damage=Math.round(safeNumber(event.damage)),points=Math.round(safeNumber(event.points)),enemyName=String(event.enemyName||'敌人').slice(0,32);
-      if(isKill){killFeed.unshift({kind,enemyName,points,expiresAt:now+3600});killFeed.length=Math.min(4,killFeed.length);renderFeed();}
+      const damage=Math.round(safeNumber(event.damage)),points=Math.round(safeNumber(event.points)),enemyName=String(event.enemyName||'敌人').slice(0,32),backstab=isKill&&event.backstab===true;
+      if(isKill){killFeed.unshift({kind,backstab,enemyName,points,expiresAt:now+3600});killFeed.length=Math.min(4,killFeed.length);renderFeed();}
       // A following automatic-fire hit must not erase the previous kill confirmation.
       if(now<feedback.protectedUntil&&priority[kind]<priority[feedback.kind])return;
       const lifetime=isKill?650:head||kind==='armorBreak'?300:160;
-      feedback={kind,damage,enemyName,points,visible:true,expiresAt:now+lifetime,protectedUntil:now+(isKill?420:head?180:0)};
+      feedback={kind,backstab,damage,enemyName,points,visible:true,expiresAt:now+lifetime,protectedUntil:now+(isKill?420:head?180:0)};
       nodes.hitmarker.classList.toggle('head',head);nodes.hitmarker.classList.toggle('kill',isKill);nodes.hitmarker.classList.toggle('armor',armor);nodes.hitmarker.classList.toggle('armor-break',kind==='armorBreak');nodes.hitmarker.classList.add('on');
-      nodes.combatConfirm.dataset.kind=kind;text('combatIcon',kind==='armorBreak'?'◈':armor?'▱':kind==='headshotKill'?'◆':head?'◇':isKill?'✕':'╳');text('combatLabel',{hit:'命中',body:'躯干命中',armor:'护甲命中',armorBreak:'护甲击碎',kill:'击杀',headshot:'头部命中',headshotKill:'爆头击杀'}[kind]);text('combatDetail',isKill?(points>0?'+'+points:''):damage>0?'−'+damage:'');nodes.combatConfirm.classList.add('on');
+      nodes.combatConfirm.dataset.kind=kind;text('combatIcon',kind==='armorBreak'?'◈':armor?'▱':kind==='headshotKill'?'◆':head?'◇':isKill?'✕':'╳');text('combatLabel',backstab?'背刺击杀':{hit:'命中',body:'躯干命中',armor:'护甲命中',armorBreak:'护甲击碎',kill:'击杀',headshot:'头部命中',headshotKill:'爆头击杀'}[kind]);text('combatDetail',isKill?(points>0?'+'+points:''):damage>0?'−'+damage:'');nodes.combatConfirm.classList.add('on');
       later('hit',()=>{feedback.visible=false;nodes.hitmarker.classList.remove('on');nodes.combatConfirm.classList.remove('on');},lifetime);
     }
     function showNextAchievement(){
@@ -210,7 +210,7 @@
       text('hpValue',Math.ceil(hp));text('hpCap',maxHp);nodes.healthFill.style.width=Math.min(100,hp/maxHp*100)+'%';nodes.healthBlock.classList.toggle('low',hp/maxHp<=.3);text('healthCondition',hp<=0?'失去信号':hp/maxHp<=.3?'危险':hp/maxHp<=.6?'受伤':'稳定');
       text('weaponName',w.name||(melee?'战术刀':slot==='secondary'?'手枪':'V-01 CARBINE'));text('weaponLevel',tactical?'固定装备':'LV.'+String(level).padStart(2,'0'));text('ammoValue',String(ammo).padStart(2,'0'));text('ammoCap',mag);text('reserveValue',Math.max(0,Number(state.reserve)||0));text('reserveCap',Math.max(0,Number(state.reserveMax)||0));nodes.ammoBlock.classList.toggle('low',!melee&&ammo<=mag*.25);nodes.ammoBlock.classList.toggle('empty',!melee&&ammo===0);
       const progress=tactical?{ratio:0}:state.progress||FPSRules.progression(kills);
-      nodes.upgradeTrack.hidden=tactical;nodes.upgradeTrack.style.setProperty('--progress',progress.ratio);text('upgradeCaption',tactical?(melee?'轻击 / 重击 · 近距离应急':slot==='secondary'?'50 伤害 · 半自动 · 快速切换':'40 伤害 · 2–3 发短点射'):level>=20?'武器满级 · 追猎进行中':'再击杀 '+(progress.required-progress.current)+' 人升级 · 升级回满血');
+      nodes.upgradeTrack.hidden=tactical;nodes.upgradeTrack.style.setProperty('--progress',progress.ratio);text('upgradeCaption',tactical?(melee?'右键重击 · 背后命中必杀':slot==='secondary'?'50 伤害 · 半自动 · 快速切换':'40 伤害 · 2–3 发短点射'):level>=20?'武器满级 · 追猎进行中':'再击杀 '+(progress.required-progress.current)+' 人升级 · 升级回满血');
       nodes.missionSteps.hidden=!tactical;nodes.missionTrack.hidden=!tactical;nodes.missionMedical.hidden=!tactical;
       if(tactical){
         const complete=!!mission.completed||mission.phase==='complete',required=Math.max(.01,Number(mission.required)||1),completedProgress=Math.max(0,Math.min(1,(Number(mission.progress)||0)/required));

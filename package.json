@@ -10,7 +10,8 @@
     "test:browser": "node qa/tactical-mission.verify.cjs",
     "test:fullscreen": "node qa/fullscreen.verify.cjs",
     "test:audio": "node qa/selected-audio.verify.cjs",
-    "test:inspect": "node qa/inspect.verify.cjs"
+    "test:inspect": "node qa/inspect.verify.cjs",
+    "test:backstab": "node qa/backstab.verify.cjs"
   },
   "engines": {
     "node": ">=20"
