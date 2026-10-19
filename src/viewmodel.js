@@ -144,7 +144,7 @@
     // Each row is [seconds, x,y,z, pitch,yaw,roll], relative to the ready pose.
     // Monotone cubic tangents are calculated once, keeping every frame free of
     // keyframe arrays, temporary vectors and spline overshoot.
-    function makeKnifeMotion(duration,hitTime,recoveryTime,keys){
+    function makePoseMotion(duration,hitTime,recoveryTime,keys){
       const slopes=keys.map(()=>new Float64Array(6));
       for(let i=1;i<keys.length-1;i++){
         const before=keys[i][0]-keys[i-1][0],after=keys[i+1][0]-keys[i][0];
@@ -156,7 +156,7 @@
       return{duration,hitTime,recoveryTime,keys,slopes};
     }
     const knifeMotions={
-      light:makeKnifeMotion(.52,.12,.205,[
+      light:makePoseMotion(.52,.12,.205,[
         [0,0,0,0,0,0,0],
         [.065,.055,.018,.035,.10,.12,-.24],
         [.12,-.10,.04,-.095,-.12,-.22,.32],
@@ -164,7 +164,7 @@
         [.285,-.285,-.13,-.06,-.20,-.28,.74],
         [.52,0,0,0,0,0,0]
       ]),
-      heavy:makeKnifeMotion(.95,.28,.38,[
+      heavy:makePoseMotion(.95,.28,.38,[
         [0,0,0,0,0,0,0],
         [.17,.035,.14,.015,-.46,.16,-.72],
         [.24,.01,.15,-.04,-.22,.05,-.46],
@@ -174,6 +174,49 @@
         [.95,0,0,0,0,0,0]
       ])
     };
+    // Lift, turn to show each face, then settle. These offsets belong only to
+    // the first-person rig; they never rotate the player's camera or aim.
+    const inspectMotions={
+      primary:makePoseMotion(2.35,0,0,[
+        [0,0,0,0,0,0,0],
+        [.48,-.13,.035,.08,.18,.58,-.38],
+        [.94,-.13,.035,.08,.18,.58,-.38],
+        [1.48,-.21,.05,.02,.08,-.35,.32],
+        [1.80,-.21,.05,.02,.08,-.35,.32],
+        [2.35,0,0,0,0,0,0]
+      ]),
+      secondary:makePoseMotion(2.1,0,0,[
+        [0,0,0,0,0,0,0],
+        [.42,-.12,.10,-.03,.12,.65,-.48],
+        [.80,-.12,.10,-.03,.12,.65,-.48],
+        [1.26,-.17,.07,.015,-.12,-.55,.36],
+        [1.62,-.17,.07,.015,-.12,-.55,.36],
+        [2.1,0,0,0,0,0,0]
+      ]),
+      knife:makePoseMotion(1.95,0,0,[
+        [0,0,0,0,0,0,0],
+        [.4,-.17,.055,-.13,.10,-.60,-.48],
+        [.74,-.17,.055,-.13,.10,-.60,-.48],
+        [1.2,-.14,.025,-.10,-.16,.65,.28],
+        [1.5,-.14,.025,-.10,-.16,.65,.28],
+        [1.95,0,0,0,0,0,0]
+      ])
+    };
+    function sampleMotion(motion,elapsed,offset){
+      let index=0;while(index<motion.keys.length-2&&elapsed>motion.keys[index+1][0])index++;
+      const from=motion.keys[index],to=motion.keys[index+1],span=to[0]-from[0],t=(elapsed-from[0])/span,t2=t*t,t3=t2*t;
+      const h00=2*t3-3*t2+1,h10=t3-2*t2+t,h01=-2*t3+3*t2,h11=t3-t2;
+      for(let axis=0;axis<6;axis++)offset[axis]=h00*from[axis+1]+h10*span*motion.slopes[index][axis]+h01*to[axis+1]+h11*span*motion.slopes[index+1][axis];
+    }
+    const inspectOffset=new Float64Array(6);
+    let inspectActive=false,inspectElapsed=0,inspectSlot='primary',inspectBlocked=false;
+    function cancelInspect(){inspectActive=false;inspectElapsed=0;inspectOffset.fill(0);}
+    function updateInspection(dt){
+      inspectOffset.fill(0);if(!inspectActive)return;
+      const motion=inspectMotions[inspectSlot];inspectElapsed=Math.min(motion.duration,inspectElapsed+dt);
+      if(inspectElapsed>=motion.duration){inspectActive=false;return;}
+      sampleMotion(motion,inspectElapsed,inspectOffset);
+    }
     const knifeOffset=new Float64Array(6);
     let meleeActive=false,meleeElapsed=0,meleeMode='light',meleeJustStarted=false;
     function cancelMelee(){meleeActive=false;meleeElapsed=0;meleeJustStarted=false;knifeOffset.fill(0);}
@@ -184,17 +227,14 @@
       if(meleeJustStarted){meleeJustStarted=false;return;}
       const motion=knifeMotions[meleeMode];meleeElapsed=Math.min(motion.duration,meleeElapsed+dt);
       if(meleeElapsed>=motion.duration){meleeActive=false;return;}
-      let index=0;while(index<motion.keys.length-2&&meleeElapsed>motion.keys[index+1][0])index++;
-      const from=motion.keys[index],to=motion.keys[index+1],span=to[0]-from[0],t=(meleeElapsed-from[0])/span,t2=t*t,t3=t2*t;
-      const h00=2*t3-3*t2+1,h10=t3-2*t2+t,h01=-2*t3+3*t2,h11=t3-t2;
-      for(let axis=0;axis<6;axis++)knifeOffset[axis]=h00*from[axis+1]+h10*span*motion.slopes[index][axis]+h01*to[axis+1]+h11*span*motion.slopes[index+1][axis];
+      sampleMotion(motion,meleeElapsed,knifeOffset);
     }
     let time=0,adsBlend=0,motionBlend=0,sprintBlend=0,kick=0,kickVelocity=0,flashTime=0,roll=0,switchAmount=0;
     let activeSlot='primary',desiredSlot='primary';
     function slotOf(value,fallback='primary'){return value==='knife'||value==='melee'?'knife':value==='secondary'||value==='pistol'?'secondary':value==='primary'||value==='rifle'?'primary':fallback;}
     function selectSlot(slot){
       activeSlot=slot;gun.visible=slot==='primary';pistol.visible=slot==='secondary';knife.visible=slot==='knife';
-      adsBlend=0;kick=0;kickVelocity=0;roll=0;flashTime=0;cancelMelee();muzzle.visible=false;flashLight.intensity=0;
+      adsBlend=0;kick=0;kickVelocity=0;roll=0;flashTime=0;cancelMelee();cancelInspect();muzzle.visible=false;flashLight.intensity=0;
       const owner=slot==='secondary'?pistol:gun;owner.add(muzzle);owner.add(flashLight);
       muzzle.position.set(0,slot==='secondary'?.027:.01,slot==='secondary'?-.462:-1);
       flashLight.position.set(0,.03,slot==='secondary'?-.37:-.85);
@@ -204,7 +244,7 @@
       // Paused/dead views keep the pose, but transient muzzle light must not freeze.
       if(dt===0)flashTime=0;
       const requested=slotOf(state.activeSlot||state.weaponKind,desiredSlot);
-      if(requested!==desiredSlot){desiredSlot=requested;flashTime=0;cancelMelee();}
+      if(requested!==desiredSlot){desiredSlot=requested;flashTime=0;cancelMelee();cancelInspect();}
       if(desiredSlot!==activeSlot){switchAmount=Math.min(1,switchAmount+dt/ .10);if(switchAmount>=1)selectSlot(desiredSlot);}
       else switchAmount=Math.max(0,switchAmount-dt/ .16);
       const melee=activeSlot==='knife',sidearm=activeSlot==='secondary';
@@ -223,6 +263,8 @@
       else sprintBlend+=(targetSprint-sprintBlend)*(1-Math.exp(-dt*8));
       kickVelocity+=(-kick*175-kickVelocity*21)*dt;kick+=kickVelocity*dt;kick=Math.max(-.016,Math.min(.14,kick));roll*=Math.exp(-dt*13);
       const rawReload=melee?0:Number(state.reloadProgress)||0,reloading=rawReload>0&&rawReload<1;
+      inspectBlocked=!!state.ads||adsBlend>.001||reloading||switchAmount>0||desiredSlot!==activeSlot||meleeActive;
+      if(inspectBlocked)cancelInspect();
       const reload=reloading?Math.sin(Math.PI*rawReload):0;
       const bobStrength=motionBlend*(1-adsBlend*.85),bobTime=time*(8+sprintBlend*4);
       const bobX=Math.sin(bobTime)*.006*bobStrength,bobY=Math.abs(Math.cos(bobTime))*.006*bobStrength;
@@ -239,13 +281,23 @@
       pistolLeft.position.y=-.122-magDrop*.12;pistolLeft.position.z=-.045+reload*.095;
       updateKnifeMotion(dt);
       if(melee){rig.position.x+=knifeOffset[0];rig.position.y+=knifeOffset[1];rig.position.z+=knifeOffset[2];rig.rotation.x+=knifeOffset[3];rig.rotation.y+=knifeOffset[4];rig.rotation.z+=knifeOffset[5];}
+      updateInspection(dt);
+      rig.position.x+=inspectOffset[0];rig.position.y+=inspectOffset[1];rig.position.z+=inspectOffset[2];
+      rig.rotation.x+=inspectOffset[3];rig.rotation.y+=inspectOffset[4];rig.rotation.z+=inspectOffset[5];
       rig.position.y-=switchAmount*.36;rig.rotation.x-=switchAmount*.35;
       flashTime=melee?0:Math.max(0,flashTime-dt);muzzle.visible=flashTime>0;flashLight.intensity=flashTime>0?(sidearm?1.65:2.1):0;
       if(muzzle.visible){muzzle.rotation.z=time*71;muzzle.scale.setScalar(.8+Math.random()*.35);materials.flash.opacity=Math.min(1,flashTime*45);}
     }
     return{
       update,
+      inspect(slot=activeSlot){
+        if(inspectActive){cancelInspect();return true;}
+        if(inspectBlocked||meleeActive||switchAmount>0||slotOf(slot)!==activeSlot||desiredSlot!==activeSlot)return false;
+        inspectSlot=activeSlot;inspectElapsed=0;inspectActive=true;return true;
+      },
+      cancelInspect,
       shoot(slot,mode='light'){
+        cancelInspect();
         // Optional slot lets input dispatch a shot before the frame's update runs.
         if(slot)desiredSlot=slotOf(slot,desiredSlot);
         if(activeSlot!==desiredSlot){selectSlot(desiredSlot);switchAmount=Math.min(switchAmount,.35);}
@@ -260,8 +312,8 @@
       resize(width,height){camera.aspect=Math.max(1,width)/Math.max(1,height);camera.updateProjectionMatrix();},
       cancelMelee,
       // Snapshot only: diagnostics can inspect timing without mutating the rig.
-      getState(){const motion=knifeMotions[meleeMode];return{activeSlot,adsBlend,melee:{active:meleeActive,mode:meleeMode,elapsed:meleeElapsed,duration:motion.duration,hitTime:motion.hitTime,phase:!meleeActive?'idle':meleeElapsed<motion.hitTime?'windup':meleeElapsed<motion.recoveryTime?'strike':'recover'},pose:{position:[rig.position.x,rig.position.y,rig.position.z],rotation:[rig.rotation.x,rig.rotation.y,rig.rotation.z]}};},
-      reset(){time=0;adsBlend=0;motionBlend=0;sprintBlend=0;kick=0;kickVelocity=0;flashTime=0;roll=0;cancelMelee();meleeMode='light';switchAmount=0;desiredSlot='primary';selectSlot('primary');update(0,{activeSlot:'primary'});}
+      getState(){const motion=knifeMotions[meleeMode];return{activeSlot,adsBlend,inspection:{active:inspectActive,elapsed:inspectElapsed,duration:inspectMotions[inspectSlot].duration,slot:inspectSlot},melee:{active:meleeActive,mode:meleeMode,elapsed:meleeElapsed,duration:motion.duration,hitTime:motion.hitTime,phase:!meleeActive?'idle':meleeElapsed<motion.hitTime?'windup':meleeElapsed<motion.recoveryTime?'strike':'recover'},pose:{position:[rig.position.x,rig.position.y,rig.position.z],rotation:[rig.rotation.x,rig.rotation.y,rig.rotation.z]}};},
+      reset(){time=0;adsBlend=0;motionBlend=0;sprintBlend=0;kick=0;kickVelocity=0;flashTime=0;roll=0;cancelMelee();cancelInspect();inspectSlot='primary';inspectBlocked=false;meleeMode='light';switchAmount=0;desiredSlot='primary';selectSlot('primary');update(0,{activeSlot:'primary'});}
     };
   };
 })(window);

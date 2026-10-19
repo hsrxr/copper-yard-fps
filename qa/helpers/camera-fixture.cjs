@@ -13,7 +13,7 @@ function fixture(){
   ui:{isCareerOpen:()=>false,toast(){},setScreen(){}},document,canvas,
   window:{addEventListener:(type,fn)=>(winEvents[type]??=[]).push(fn)},performance:{now:()=>0},
   clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),mission:{tick(){}},enemies:{interruptAttacks(){}},renderer:{shadowMap:{}},
-  audio:{jump(){},reload(){}},startCount:0,reloadCount:0,cancelMelee(){},saveCareerNow(){},updateHUD(){},requestControl(){},resizePending:false,last:0,
+  audio:{jump(){},reload(){}},startCount:0,reloadCount:0,cancelMelee(){},cancelInspect(){},saveCareerNow(){},updateHUD(){},requestControl(){},resizePending:false,last:0,
   camera:{position:{set(x,y,z){this.x=x;this.y=y;this.z=z;}},rotation:{set(x,y,z){this.x=x;this.y=y;this.z=z;}},fov:56,updateProjectionMatrix(){},updateMatrixWorld(){}}
  };
  ctx.releaseInput=()=>{ctx.firing=ctx.ads=false;for(const k in ctx.keys)ctx.keys[k]=false;};

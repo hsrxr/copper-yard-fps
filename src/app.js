@@ -57,7 +57,8 @@
   function fail(error){const message=error?.message||String(error);if(!errors.includes(message)&&errors.length<16)errors.push(message);failed=true;ui.error(message);console.error(error);if(document.pointerLockElement)document.exitPointerLock();}
   function trace(origin,dir,max){return FPSRules.traceWorld(origin,dir,max,world,arena.colliders);}
   function cancelMelee(){meleeAttack.active=false;meleeAttack.left=0;if(viewModel)viewModel.cancelMelee();}
-  function releaseInput(){firing=ads=false;attackQueued=null;footstepDistance=0;cancelMelee();for(const k in keys)keys[k]=false;if(tactical)mission.tick(0,{interact:false});}
+  function cancelInspect(){if(viewModel)viewModel.cancelInspect();}
+  function releaseInput(){firing=ads=false;attackQueued=null;footstepDistance=0;cancelMelee();cancelInspect();for(const k in keys)keys[k]=false;if(tactical)mission.tick(0,{interact:false});}
   function requestControl(){
     if(screen!=='playing'||controlRequest||document.pointerLockElement===canvas)return;
     canvas.focus();audio.init();
@@ -97,7 +98,7 @@
   function resumeGame(){if(screen!=='paused'||lost||failed||ui.isCareerOpen())return;screen='playing';ui.setScreen(screen);releaseInput();last=performance.now();requestControl();}
   function takeDamage(amount,origin){
     if(screen!=='playing')return {applied:0,died:false};const result=FPSRules.damagePlayer(combat,amount);
-    if(result.applied){lastHurtAt=elapsed;runStats.damageTaken+=result.applied;if(tactical)mission.tick(0,{damaged:true});const angle=origin?Math.atan2(origin.x-camera.position.x,camera.position.z-origin.z)+player.yaw:0;ui.hurt(angle);audio.hurt();}
+    if(result.applied){cancelInspect();lastHurtAt=elapsed;runStats.damageTaken+=result.applied;if(tactical)mission.tick(0,{damaged:true});const angle=origin?Math.atan2(origin.x-camera.position.x,camera.position.z-origin.z)+player.yaw:0;ui.hurt(angle);audio.hurt();}
     if(result.died){deathCount++;screen='dead';releaseInput();syncCareer();career.finish('death');ui.setScreen(screen);audio.death();if(document.pointerLockElement)document.exitPointerLock();updateHUD(true);}
     return result;
   }
@@ -108,8 +109,14 @@
     if(result.upgraded){audio.upgrade();ui.toast('升级 LV.'+combat.level+' · 生命已回满 · 武器性能提升','upgrade');}
     renderer.shadowMap.needsUpdate=true;
   }
-  function reload(){if(screen==='playing'&&FPSRules.startReload(combat)){combat.reloadDuration=combat.reloadLeft;audio.reload();return true;}return false;}
-  function equip(slot){if(screen!=='playing'||!FPSRules.switchWeapon(combat,slot))return false;firing=ads=false;attackQueued=null;cancelMelee();player.recoil=0;updateHUD(true);return true;}
+  function inspectWeapon(){
+    if(screen!=='playing'||!locked||combat.dead||ui.isCareerOpen())return false;
+    // Inspection is cosmetic. Never steal a combat action or reset its timer.
+    if(ads||firing||attackQueued||keys.Mouse0||keys.Mouse2||keys.KeyE||keys.Space||combat.reloadLeft>0||combat.switchCooldown>0||combat.fireCooldown>0||meleeAttack.active||FPSRules.accuracy(combat).adsBlend>.001)return false;
+    return viewModel.inspect(combat.activeSlot);
+  }
+  function reload(){if(screen!=='playing')return false;cancelInspect();if(FPSRules.startReload(combat)){combat.reloadDuration=combat.reloadLeft;audio.reload();return true;}return false;}
+  function equip(slot){if(screen!=='playing')return false;cancelInspect();if(!FPSRules.switchWeapon(combat,slot))return false;firing=ads=false;attackQueued=null;cancelMelee();player.recoil=0;updateHUD(true);return true;}
   function applyPlayerHit(hit,weapon,attackMeta){
     if(!hit)return null;
     const scoreBefore=combat.score,result=enemies.damage(hit.id,hit.zone,weapon.damage*FPSRules.zoneMultiplier(hit.zone,weapon),Object.assign({origin:{x:camera.position.x,y:camera.position.y,z:camera.position.z},direction:{x:shotDir.x,y:shotDir.y,z:shotDir.z}},attackMeta));
@@ -142,6 +149,7 @@
   }
   function shoot(mode='light'){
     if(screen!=='playing')return false;
+    cancelInspect();
     const weapon=combat.weapon,melee=weapon.kind==='knife';
     // Snapshot before tryFire adds this round's bloom; that penalty affects later shots.
     const spread=melee?0:FPSRules.accuracy(combat).spread;
@@ -293,10 +301,10 @@
       if(screen==='playing'){pauseGame();ui.toast('点击继续以捕获鼠标','info');}
     });
     document.addEventListener('mousemove',e=>{if(screen==='playing'&&locked&&document.pointerLockElement===canvas&&!ui.isCareerOpen())player.look(e.movementX,e.movementY,ads);});
-    document.addEventListener('mousedown',e=>{if(screen!=='playing'||!locked||ui.isCareerOpen())return;if(e.button===0){if(!attackQueued)attackQueued='light';firing=combat.weapon.automatic;}if(e.button===2){if(combat.weapon.kind==='knife'){if(!attackQueued)attackQueued='heavy';ads=false;}else ads=aimMode==='toggle'?!ads:true;e.preventDefault();}});
-    document.addEventListener('mouseup',e=>{if(e.button===0)firing=false;if(e.button===2&&aimMode==='hold')ads=false;});canvas.addEventListener('contextmenu',e=>e.preventDefault());
+    document.addEventListener('mousedown',e=>{if(screen!=='playing'||!locked||ui.isCareerOpen())return;if(e.button===0||e.button===2){keys['Mouse'+e.button]=true;cancelInspect();}if(e.button===0){if(!attackQueued)attackQueued='light';firing=combat.weapon.automatic;}if(e.button===2){if(combat.weapon.kind==='knife'){if(!attackQueued)attackQueued='heavy';ads=false;}else ads=aimMode==='toggle'?!ads:true;e.preventDefault();}});
+    document.addEventListener('mouseup',e=>{keys['Mouse'+e.button]=false;if(e.button===0)firing=false;if(e.button===2&&aimMode==='hold')ads=false;});canvas.addEventListener('contextmenu',e=>e.preventDefault());
     document.addEventListener('keydown',e=>{if(!e.repeat&&tactical&&(screen==='dead'||screen==='extracted')&&['KeyR','Enter'].includes(e.code)){e.preventDefault();startGame();}});
-    document.addEventListener('keydown',e=>{if(screen!=='playing'||ui.isCareerOpen())return;if(['KeyW','KeyA','KeyS','KeyD','Space','KeyR','KeyE','Digit1','Digit2','Digit3','Numpad1','Numpad2','Numpad3'].includes(e.code))e.preventDefault();keys[e.code]=true;if(!e.repeat){if(e.code==='Space'&&player.jump())audio.jump();if(e.code==='KeyR')reload();if(e.code==='Escape')pauseGame();const slot={Digit1:'primary',Digit2:'secondary',Digit3:'knife',Numpad1:'primary',Numpad2:'secondary',Numpad3:'knife'}[e.code];if(slot)equip(slot);}});
+    document.addEventListener('keydown',e=>{if(screen!=='playing'||ui.isCareerOpen())return;if(['KeyW','KeyA','KeyS','KeyD','Space','KeyR','KeyE','KeyY','Digit1','Digit2','Digit3','Numpad1','Numpad2','Numpad3'].includes(e.code))e.preventDefault();keys[e.code]=true;if(!e.repeat){if(e.code==='Space'||e.code==='KeyE')cancelInspect();if(e.code==='Space'&&player.jump())audio.jump();if(e.code==='KeyR')reload();if(e.code==='KeyY')inspectWeapon();if(e.code==='Escape')pauseGame();const slot={Digit1:'primary',Digit2:'secondary',Digit3:'knife',Numpad1:'primary',Numpad2:'secondary',Numpad3:'knife'}[e.code];if(slot)equip(slot);}});
     document.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',pauseGame);document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseGame();});window.addEventListener('resize',()=>resizePending=true);
     window.addEventListener('pagehide',saveCareerNow);
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();lost=true;pauseGame();ui.toast('图形上下文已暂停，等待恢复','info');});

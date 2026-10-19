@@ -112,3 +112,59 @@ test('pausing a moving weapon freezes the pose and stationary reload still anima
   view.update(.016,{moving:0,reloadProgress:.5});
   assert.notDeepEqual(poseValues(view),rest,'reload is an intentional action, not idle sway');
 });
+
+// Catch missing inspection, frozen endings and accidental changes to idle sway.
+test('every weapon inspection is visible, continuous and returns exactly to ready',()=>{
+  for(const slot of ['primary','secondary','knife'])for(const step of [1/30,1/144]){
+    const view=context.createViewModel(context.THREE);view.reset();
+    advanceState(view,.4,{activeSlot:slot});const rest=poseValues(view);
+    assert.equal(typeof view.inspect,'function','weapons support inspection');
+    assert.equal(view.inspect(slot),true);let previous=rest,travel=0;
+    for(let seconds=0;seconds<3.5;seconds+=step){
+      view.update(step,{activeSlot:slot});const pose=poseValues(view);
+      for(let axis=0;axis<6;axis++){
+        assert.ok(Number.isFinite(pose[axis]));
+        assert.ok(Math.abs(pose[axis]-previous[axis])<(axis<3?.09:.3),'no pose teleport');
+        travel+=Math.abs(pose[axis]-previous[axis]);
+      }
+      previous=pose;
+    }
+    assert.ok(travel>1,'inspection visibly turns and presents the weapon');
+    assert.equal(view.getState().inspection.active,false);assert.deepEqual(poseValues(view),rest);
+    advanceState(view,.5,{activeSlot:slot});assert.deepEqual(poseValues(view),rest);
+  }
+});
+
+test('inspection never blocks firearm recoil or replaces a knife strike',()=>{
+  for(const slot of ['primary','secondary','knife']){
+    const view=context.createViewModel(context.THREE),reference=context.createViewModel(context.THREE);
+    view.reset();reference.reset();advanceState(view,.4,{activeSlot:slot});advanceState(reference,.4,{activeSlot:slot});
+    assert.equal(view.inspect(slot),true);advanceState(view,.7,{activeSlot:slot});
+    view.shoot(slot,'heavy');reference.shoot(slot,'heavy');
+    view.update(.016,{activeSlot:slot});reference.update(.016,{activeSlot:slot});
+    assert.equal(view.getState().inspection.active,false);
+    // Recoil roll is intentionally random; position/pitch/yaw must match.
+    const actual=poseValues(view),expected=poseValues(reference);
+    for(let axis=0;axis<5;axis++)near(actual[axis],expected[axis]);
+    assert.equal(view.getState().melee.active,slot==='knife');
+    if(slot==='knife')assert.equal(view.inspect(slot),false,'inspection cannot cancel a paid-for knife attack');
+  }
+});
+
+test('inspection yields to ADS, reload, weapon switch, explicit cancellation and reset',()=>{
+  for(const action of ['ads','reload','switch','cancel','reset']){
+    const view=context.createViewModel(context.THREE);view.reset();assert.equal(view.inspect('primary'),true);
+    advanceState(view,.7,{});
+    if(action==='cancel')view.cancelInspect();if(action==='reset')view.reset();
+    const state=action==='ads'?{ads:true,adsBlend:1}:action==='reload'?{reloadProgress:.3}:action==='switch'?{activeSlot:'secondary'}:{};
+    view.update(.016,state);assert.equal(view.getState().inspection.active,false,action);
+    if(['ads','reload','switch'].includes(action))assert.equal(view.inspect('primary'),false,'cannot restart over '+action);
+  }
+});
+
+test('movement preserves inspection and a second press cancels without restarting it',()=>{
+  const view=context.createViewModel(context.THREE);view.reset();assert.equal(view.inspect('primary'),true);
+  advanceState(view,.6,{moving:1});assert.equal(view.getState().inspection.active,true);
+  view.inspect('primary');view.update(.016,{});assert.equal(view.getState().inspection.active,false);
+  advanceState(view,.5,{});assert.deepEqual(poseValues(view),[.245,-.235,-.38,0,0,0]);
+});

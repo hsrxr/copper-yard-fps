@@ -21,7 +21,7 @@ function fixture({ slot = 'primary', ads = false } = {}) {
     player: { moving: 0, grounded: true, pitch: 0, yaw: 0, recoil: 0 },
     trace: () => null, enemies: { hearPlayerShot: noop, raycast: (_, dir) => { rays.push(dir.clone()); return null; } },
     effects: { tracer: noop, impact: noop }, viewModel: { shoot: noop }, audio: { shot: noop },
-    recordAttack: noop, applyPlayerHit: () => null, reload: noop, elapsed: 0, lastEmptyToast: 0,
+    recordAttack: noop, applyPlayerHit: () => null, reload: noop, cancelInspect: noop, elapsed: 0, lastEmptyToast: 0,
     clamp: (v, a, b) => Math.max(a, Math.min(b, v))
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'src/combat.js'), 'utf8'), ctx);
