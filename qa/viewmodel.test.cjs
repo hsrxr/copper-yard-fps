@@ -168,3 +168,69 @@ test('movement preserves inspection and a second press cancels without restartin
   view.inspect('primary');view.update(.016,{});assert.equal(view.getState().inspection.active,false);
   advanceState(view,.5,{});assert.deepEqual(poseValues(view),[.245,-.235,-.38,0,0,0]);
 });
+
+function renderedScene(view){let scene;view.render({autoClear:true,clearDepth(){},render(value){scene=value;}});assert.ok(scene,'the real view model render exposes a scene');scene.updateMatrixWorld(true);return scene;}
+function butterflyFixture(){const view=context.createViewModel(context.THREE);view.reset();advanceState(view,.4,{activeSlot:'knife',meleeStyle:'butterfly'});return view;}
+function butterflyParts(view){const scene=renderedScene(view),parts={};for(const name of ['butterfly-weapon','butterfly-blade-carrier','butterfly-free-handle','butterfly-safe-handle','butterfly-grip']){parts[name]=scene.getObjectByName(name);assert.ok(parts[name],name+' exists in the rendered assembly');}return parts;}
+function jointAngles(view){const parts=butterflyParts(view);return [parts['butterfly-blade-carrier'].rotation.z,parts['butterfly-free-handle'].rotation.z];}
+
+test('butterfly is an optional knife style while classic remains the default',()=>{
+  const classic=fixture(),butterfly=butterflyFixture();
+  assert.equal(classic.getState().meleeStyle,'classic');
+  assert.equal(butterfly.getState().meleeStyle,'butterfly');
+  const classicScene=renderedScene(classic),butterflyScene=renderedScene(butterfly);
+  assert.equal(classicScene.getObjectByName('knife-weapon').visible,true);
+  assert.equal(classicScene.getObjectByName('butterfly-weapon').visible,false);
+  assert.equal(butterflyScene.getObjectByName('knife-weapon').visible,false);
+  assert.equal(butterflyScene.getObjectByName('butterfly-weapon').visible,true);
+  assert.equal(classic.inspect('knife'),true);assert.equal(classic.getState().inspection.duration,1.95);
+  assert.equal(butterfly.inspect('knife'),true);assert.equal(butterfly.getState().inspection.duration,2.8);
+  butterfly.update(.02,{activeSlot:'knife'});assert.equal(butterfly.getState().meleeStyle,'butterfly','style survives ordinary frames that omit the preference');
+  butterfly.cancelInspect();advanceState(butterfly,.4,{activeSlot:'primary'});
+  assert.equal(renderedScene(butterfly).getObjectByName('butterfly-weapon').visible,false,'switching to a gun hides both knife choices');
+});
+
+test('butterfly inspection articulates attached parts continuously and returns exactly open',()=>{
+  for(const step of [1/30,1/144]){
+    const view=butterflyFixture(),parts=butterflyParts(view),rest=poseValues(view),safe=parts['butterfly-safe-handle'];
+    assert.equal(parts['butterfly-free-handle'].parent,parts['butterfly-blade-carrier'],'free handle follows the blade hinge');
+    const safeRest=[...safe.position.toArray(),...safe.rotation.toArray().slice(0,3)];
+    const maxima=[0,0],minima=[0,0];let previous=jointAngles(view);
+    assert.deepEqual(previous,[0,0]);assert.equal(view.inspect('knife'),true);
+    for(let seconds=0;seconds<3.2;seconds+=step){
+      view.update(step,{activeSlot:'knife'});const angles=jointAngles(view);
+      for(let i=0;i<2;i++){assert.ok(Number.isFinite(angles[i]));assert.ok(Math.abs(angles[i]-previous[i])<.7,'articulated joints must not snap between frames');maxima[i]=Math.max(maxima[i],angles[i]);minima[i]=Math.min(minima[i],angles[i]);}
+      parts['butterfly-weapon'].traverse(node=>{for(const value of node.matrixWorld.elements)assert.ok(Number.isFinite(value),'rendered assembly stays finite');});
+      assert.deepEqual([...safe.position.toArray(),...safe.rotation.toArray().slice(0,3)],safeRest,'safe handle stays anchored in the grip');
+      previous=angles;
+    }
+    assert.ok(maxima[0]-minima[0]>=2,'blade visibly folds around its hinge');
+    assert.ok(maxima[1]-minima[1]>=2,'free handle visibly swings around its hinge');
+    assert.deepEqual(jointAngles(view),[0,0]);assert.deepEqual(poseValues(view),rest);
+    assert.equal(view.getState().inspection.active,false);
+    advanceState(view,.3,{activeSlot:'knife'});assert.deepEqual(jointAngles(view),[0,0]);assert.deepEqual(poseValues(view),rest);
+  }
+});
+
+test('butterfly pause freezes hinges and interruptions restore an open combat-ready knife',()=>{
+  for(const action of ['cancel','light','heavy','switch','reset']){
+    const view=butterflyFixture();assert.equal(view.inspect('knife'),true);
+    let folded=false;for(let frame=0;frame<280&&!folded;frame++){view.update(.01,{activeSlot:'knife'});folded=jointAngles(view).some(angle=>Math.abs(angle)>.5);}
+    const paused=jointAngles(view),pose=poseValues(view);assert.ok(folded,'interruption starts during a folded pose');
+    view.update(0,{activeSlot:'knife'});view.update(0,{activeSlot:'knife'});
+    assert.deepEqual(jointAngles(view),paused);assert.deepEqual(poseValues(view),pose);
+    if(action==='cancel')view.cancelInspect();
+    else if(action==='reset')view.reset();
+    else if(action==='switch')view.update(.016,{activeSlot:'primary'});
+    else view.shoot('knife',action);
+    assert.equal(view.getState().inspection.active,false,action);
+    assert.deepEqual(jointAngles(view),[0,0],action+' restores both hinges immediately');
+    if(action==='light'||action==='heavy'){
+      const expectedHit=action==='light'?.12:.28;
+      view.update(.016,{activeSlot:'knife'});assert.equal(view.getState().melee.hitTime,expectedHit);
+      advanceState(view,expectedHit-.001,{activeSlot:'knife'});assert.equal(view.getState().melee.phase,'windup');
+      advanceState(view,.002,{activeSlot:'knife'});assert.equal(view.getState().melee.phase,'strike');
+      assert.deepEqual(jointAngles(view),[0,0],'blade remains open through contact');
+    }
+  }
+});

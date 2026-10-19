@@ -3,8 +3,10 @@
  * No production state mutation or test-only inspection trigger is used. */
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {pathToFileURL}=require('node:url'),{chromium}=require('playwright');
+const {isolateDesktopMouse}=require('./helpers/browser-input.cjs');
 const root=path.resolve(__dirname,'..'),entry=path.join(root,'index.html'),out=path.join(__dirname,'artifacts');
-const bytes=fs.readFileSync(entry),url=process.env.COPPER_URL||pathToFileURL(entry).href,tag=process.env.COPPER_URL?'remote':'local';
+const meleeStyle=process.env.COPPER_MELEE_STYLE==='butterfly'?'butterfly':'classic';
+const bytes=fs.readFileSync(entry),url=process.env.COPPER_URL||pathToFileURL(entry).href,tag=(process.env.COPPER_URL?'remote':'local')+(meleeStyle==='butterfly'?'-butterfly':'');
 const report={testedAt:new Date().toISOString(),url,expectedSha256:crypto.createHash('sha256').update(bytes).digest('hex'),checks:[],errors:[],external:[],screenshots:[],limitations:['Real headless Chrome keyboard and mouse input; existing debug placement and enemy fire toggle isolate the encounter.','Controlled damage and empty ammunition use existing debug hooks. Screenshots supplement numerical pose and lifecycle assertions.']};
 let browser,page,phase='setup';
 const state=()=>page.evaluate(()=>CopperYardFPS.getState());
@@ -20,11 +22,16 @@ function stableFacts(s){return {position:s.player.position,yaw:s.player.yaw,pitc
 async function launch(){const options={headless:true,args:['--enable-webgl','--ignore-gpu-blocklist']};if(process.env.COPPER_BROWSER)return chromium.launch({...options,executablePath:process.env.COPPER_BROWSER});try{return await chromium.launch({...options,channel:process.env.COPPER_BROWSER_CHANNEL||'chrome'});}catch{return chromium.launch(options);}}
 async function main(){
  fs.mkdirSync(out,{recursive:true});browser=await launch();page=await browser.newPage({viewport:{width:1440,height:900}});
+ await isolateDesktopMouse(page,report);
+ // Raw pointer lock can receive desktop motion on Windows even in headless
+ // Chrome. Keep evidence on failure; do not suppress real input in the game.
+ await page.addInitScript(()=>{window.__inspectMouseInput=[];document.addEventListener('mousemove',event=>{if(document.pointerLockElement){window.__inspectMouseInput.push({x:event.movementX,y:event.movementY,time:performance.now()});if(window.__inspectMouseInput.length>128)window.__inspectMouseInput.shift();}});});
  page.on('pageerror',e=>report.errors.push({phase,message:e.message}));page.on('console',m=>{if(m.type()==='error')report.errors.push({phase,message:m.text()});});
  page.on('request',r=>{if(/^https?:/.test(r.url())&&r.url()!==url)report.external.push(r.url());});
  if(!process.env.COPPER_URL)await page.route(/^https?:/,r=>r.abort());
  if(process.env.COPPER_URL){const res=await page.request.get(url);assert.ok(res.ok());report.sha256=crypto.createHash('sha256').update(await res.body()).digest('hex');assert.equal(report.sha256,report.expectedSha256,'served build equals local artifact');}else report.sha256=report.expectedSha256;
  await page.goto(url);await page.waitForFunction(()=>window.CopperYardFPS?.getState().ready,null,{timeout:45000});
+ await page.locator('#meleeStyleSelect').selectOption(meleeStyle);
  await page.locator('#qualitySelect').selectOption('low');await page.locator('#menuAdaptiveEffects').uncheck();await page.locator('#startButton').click();await playing();
  await page.evaluate(()=>{CopperYardFPS.debug.setEnemyFire(false);CopperYardFPS.debug.setPlayer({x:6,z:84,yaw:0,pitch:0});});await waitGame(.6);
  for(const [key,slot]of [['Digit1','primary'],['Digit2','secondary'],['Digit3','knife']])await check(slot+' inspection animates then returns to ready without gameplay changes',async()=>{
@@ -82,4 +89,4 @@ async function main(){
  });
  await check('offline artifact remains self-contained and runtime stays clean',async()=>{assert.deepEqual(report.errors,[]);assert.deepEqual(report.external,[]);const s=await state();assert.deepEqual(s.errors,[]);assert.equal(crypto.createHash('sha256').update(fs.readFileSync(entry)).digest('hex'),report.expectedSha256,'artifact unchanged during acceptance');return{errors:report.errors,external:report.external};});
 }
-main().then(()=>report.status='PASS').catch(error=>{report.status='FAIL';report.phase=phase;report.failure=error.stack;console.error(error.stack);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'inspect-'+tag+'.json'),JSON.stringify(report,null,2));console.log(report.status+' '+report.checks.length+' checks');});
+main().then(()=>report.status='PASS').catch(async error=>{report.status='FAIL';report.phase=phase;report.failure=error.stack;if(page)report.mouseInput=await page.evaluate(()=>window.__inspectMouseInput).catch(()=>null);console.error(error.stack);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'inspect-'+tag+'.json'),JSON.stringify(report,null,2));console.log(report.status+' '+report.checks.length+' checks');});

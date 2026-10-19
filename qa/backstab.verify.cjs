@@ -3,8 +3,10 @@
  * continue normally. No production attack or enemy-damage method is replaced. */
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {pathToFileURL}=require('node:url'),{chromium}=require('playwright');
+const {isolateDesktopMouse}=require('./helpers/browser-input.cjs');
 const root=path.resolve(__dirname,'..'),entry=path.join(root,'index.html'),out=path.join(__dirname,'artifacts');
-const bytes=fs.readFileSync(entry),url=process.env.COPPER_URL||pathToFileURL(entry).href,tag=process.env.COPPER_URL?'remote':'local';
+const meleeStyle=process.env.COPPER_MELEE_STYLE==='butterfly'?'butterfly':'classic';
+const bytes=fs.readFileSync(entry),url=process.env.COPPER_URL||pathToFileURL(entry).href,tag=(process.env.COPPER_URL?'remote':'local')+(meleeStyle==='butterfly'?'-butterfly':'');
 const report={testedAt:new Date().toISOString(),url,expectedSha256:crypto.createHash('sha256').update(bytes).digest('hex'),checks:[],errors:[],external:[],screenshots:[],limitations:['Trusted right/left mouse input in real headless Chrome. Existing debug placement/aim and enemy-fire toggle isolate encounters.','Enemy AI movement and facing remain active. Contact geometry is observed each rendered frame, without freezing or replacing the damage logic.','Unusual numerical damage inputs and exact angular boundaries are covered by separate unit tests.']};
 let browser,page,phase='setup';
 const state=()=>page.evaluate(()=>CopperYardFPS.getState());
@@ -13,6 +15,7 @@ async function waitGame(seconds){const s=await state();await page.waitForFunctio
 async function launch(){const options={headless:true,args:['--enable-webgl','--ignore-gpu-blocklist']};if(process.env.COPPER_BROWSER)return chromium.launch({...options,executablePath:process.env.COPPER_BROWSER});try{return await chromium.launch({...options,channel:process.env.COPPER_BROWSER_CHANNEL||'chrome'});}catch{return chromium.launch(options);}}
 async function setup(){
  await page.goto(url);await page.waitForFunction(()=>window.CopperYardFPS?.getState().ready,null,{timeout:45000});
+ await page.locator('#meleeStyleSelect').selectOption(meleeStyle);
  await page.locator('#qualitySelect').selectOption('low');await page.locator('#menuAdaptiveEffects').uncheck();await page.locator('#startButton').click();
  await page.waitForFunction(()=>CopperYardFPS.getState().screen==='playing'&&document.pointerLockElement?.id==='scene');
  await page.evaluate(()=>CopperYardFPS.debug.setEnemyFire(false));await page.keyboard.press('Digit3');await waitGame(.55);
@@ -53,6 +56,7 @@ function unchangedGunStats(r){assert.equal(r.after.runStats.shots,r.before.runSt
 function detail(r){const id=r.encounter.id;return{encounter:r.encounter,before:r.before.targets.find(t=>t.id===id),after:r.after.targets.find(t=>t.id===id),preContact:r.preContact,postContact:r.postContact,feedback:r.after.feedback,stats:{before:r.before.combat,after:r.after.combat,careerBefore:r.careerBefore,careerAfter:r.careerAfter}};}
 async function main(){
  fs.mkdirSync(out,{recursive:true});browser=await launch();page=await browser.newPage({viewport:{width:1440,height:900}});
+ await isolateDesktopMouse(page,report);
  page.on('pageerror',e=>report.errors.push({phase,message:e.message}));page.on('console',m=>{if(m.type()==='error')report.errors.push({phase,message:m.text()});});
  page.on('request',r=>{if(/^https?:/.test(r.url())&&r.url()!==url)report.external.push(r.url());});if(!process.env.COPPER_URL)await page.route(/^https?:/,r=>r.abort());
  if(process.env.COPPER_URL){const res=await page.request.get(url);assert.ok(res.ok());report.sha256=crypto.createHash('sha256').update(await res.body()).digest('hex');assert.equal(report.sha256,report.expectedSha256,'served build equals local artifact');}else report.sha256=report.expectedSha256;

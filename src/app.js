@@ -17,7 +17,9 @@
   // This standalone edition always runs Copper Yard's tactical mission.
   const mapId='depot',tactical=true;
   let difficulty='standard';try{difficulty=localStorage.getItem('copper-yard-fps.difficulty')==='hard'?'hard':'standard';}catch{}
+  const meleeStyleKey='copper-yard-fps.meleeStyle';let meleeStyle='classic';try{meleeStyle=localStorage.getItem(meleeStyleKey)==='butterfly'?'butterfly':'classic';}catch{}
   let combat=FPSRules.createState(difficulty,'tactical');const audio=createGameAudio(),mission=createTacticalMission();
+  applyMeleeStyle();
   let aimMode='hold';try{aimMode=localStorage.getItem('copper-yard-fps.aimMode')==='toggle'?'toggle':'hold';}catch{}
   let crosshairStyle='classic';try{const saved=localStorage.getItem('copper-yard-fps.crosshairStyle');if(['classic','dot','cross','gap'].includes(saved))crosshairStyle=saved;}catch{}
   const observed=new Map(),missionActors=[],runStats={shots:0,hits:0,damageTaken:0};let medicActor;
@@ -27,7 +29,7 @@
   const shotDir=new THREE.Vector3(),shotRight=new THREE.Vector3(),shotUp=new THREE.Vector3(),shotEnd=new THREE.Vector3(),shotStart=new THREE.Vector3(),globalUp=new THREE.Vector3(0,1,0),daylight=new THREE.Color(0xd7e6f5);
   const playerInfo={position:null,alive:true,velocity:null},viewState={ads:false,moving:0,sprinting:false,reloadProgress:0,level:1};
   const hudState={},metrics={fps:60,quality:'medium',renderScale:1,drawCalls:0,triangles:0};
-  const ui=createFPSUI({start:()=>startGame(),resume:()=>resumeGame(),restart:()=>startGame(),newMission:()=>startGame(true),setAimMode,setCrosshairStyle,setQuality,setRenderScale,setAdaptive,setSensitivity:v=>setSensitivity(v),setDifficulty,menu:returnToMenu,mute:()=>audio.mute(),openCareer,exportCareer});ui.setScreen('menu');ui.setSetup(mapId,difficulty);if(ui.setAimMode)ui.setAimMode(aimMode);ui.setCrosshairStyle(crosshairStyle);ui.setDisplaySettings(display.snapshot());
+  const ui=createFPSUI({start:()=>startGame(),resume:()=>resumeGame(),restart:()=>startGame(),newMission:()=>startGame(true),setAimMode,setCrosshairStyle,setQuality,setRenderScale,setAdaptive,setSensitivity:v=>setSensitivity(v),setDifficulty,setMeleeStyle,menu:returnToMenu,mute:()=>audio.mute(),openCareer,exportCareer});ui.setScreen('menu');ui.setSetup(mapId,difficulty);ui.setMeleeStyle(meleeStyle);if(ui.setAimMode)ui.setAimMode(aimMode);ui.setCrosshairStyle(crosshairStyle);ui.setDisplaySettings(display.snapshot());
   let careerStorage=null;try{careerStorage=window.localStorage;}catch{/* Local files/private policies can deny storage. */}
   const career=createCareer({storage:careerStorage,onUnlock:item=>{ui.achievement(item);queueCareerSave();}});
   let careerSaveHandle=null,careerSaveIsIdle=false,lastCareerSync=0,nextCareerCheckpoint=15;
@@ -35,6 +37,12 @@
   function setAimMode(value){aimMode=value==='toggle'?'toggle':'hold';ads=false;if(ui.setAimMode)ui.setAimMode(aimMode);try{localStorage.setItem('copper-yard-fps.aimMode',aimMode);}catch{}}
   function setCrosshairStyle(value){crosshairStyle=ui.setCrosshairStyle(value);try{localStorage.setItem('copper-yard-fps.crosshairStyle',crosshairStyle);}catch{}return crosshairStyle;}
   function setDifficulty(value){if(screen!=='menu')return;difficulty=value==='hard'?'hard':'standard';try{localStorage.setItem('copper-yard-fps.difficulty',difficulty);}catch{}ui.setSetup(mapId,difficulty);}
+  function applyMeleeStyle(){combat.loadout.knife.weapon.name=meleeStyle==='butterfly'?'B-02 蝴蝶刀':'K-01 匕首';}
+  function setMeleeStyle(value){
+    // The pre-mission choice changes presentation only; shared knife rules stay intact.
+    if(screen!=='menu'){ui.setMeleeStyle(meleeStyle);return meleeStyle;}
+    meleeStyle=value==='butterfly'?'butterfly':'classic';applyMeleeStyle();ui.setMeleeStyle(meleeStyle);try{localStorage.setItem(meleeStyleKey,meleeStyle);}catch{}return meleeStyle;
+  }
   function returnToMenu(){if(!ready)return;syncCareer();career.finish('abandoned');releaseInput();if(document.pointerLockElement)document.exitPointerLock();screen='menu';ui.setScreen('menu');for(const marker of missionActors)marker.visible=false;medicActor.visible=false;ui.setSetup(mapId,difficulty);}
   // Aggregate in memory. Storage is touched at lifecycle boundaries and in a
   // coalesced idle checkpoint, never for each frame or ordinary bullet.
@@ -89,7 +97,7 @@
   }
   function startGame(newVariant=false){
     if(!ready||lost||failed)return;syncCareer();career.finish('restart');ui.closeCareer();ui.resetFeedback();releaseInput();mission.reset(newVariant===true);observed.clear();Object.assign(runStats,{shots:0,hits:0,damageTaken:0});combat=FPSRules.createState(difficulty,'tactical');elapsed=0;wave=1;deathCount=0;enemyFire=true;lastCareerSync=0;nextCareerCheckpoint=15;
-    lastHurtAt=-10;playerFootsteps=footstepListeners=footstepDistance=0;
+    applyMeleeStyle();lastHurtAt=-10;playerFootsteps=footstepListeners=footstepDistance=0;
     enemies.reset();effects.reset();viewModel.reset();selectSpawn();
     enemies.setThreat({stage:0,difficulty});career.begin({spawn:lastSpawn,quality:display.quality,map:mapId,difficulty,ruleset:'tactical-v2'});
     screen='playing';ui.setScreen(screen);enemies.spawnEncounter(mission.layout().enemies,camera.position);ui.toast('WASD 奔跑 · Shift 无声静步 · 反向轻点急停射击','info');requestControl();renderer.shadowMap.needsUpdate=true;last=performance.now();updateHUD(true);
@@ -275,7 +283,7 @@
       post.render(sceneRT);
       if(screen!=='menu'){
         ui.updateAim({tactical,melee:combat.weapon.kind==='knife',ads,accuracy:FPSRules.accuracy(combat)});
-        viewState.ads=ads;viewState.adsBlend=FPSRules.accuracy(combat).adsBlend;viewState.moving=player.moving;viewState.sprinting=player.sprinting;viewState.reloadProgress=combat.reloadLeft>0?1-combat.reloadLeft/(combat.reloadDuration||combat.weapon.reloadTime):0;viewState.level=combat.level;viewState.activeSlot=combat.activeSlot;viewState.weaponKind=combat.weapon.kind;viewModel.update(gameDt,viewState);viewModel.render(renderer);
+        viewState.ads=ads;viewState.adsBlend=FPSRules.accuracy(combat).adsBlend;viewState.moving=player.moving;viewState.sprinting=player.sprinting;viewState.reloadProgress=combat.reloadLeft>0?1-combat.reloadLeft/(combat.reloadDuration||combat.weapon.reloadTime):0;viewState.level=combat.level;viewState.activeSlot=combat.activeSlot;viewState.weaponKind=combat.weapon.kind;viewState.meleeStyle=meleeStyle;viewModel.update(gameDt,viewState);viewModel.render(renderer);
       }
       drawCalls=renderer.info.render.calls;triangles=renderer.info.render.triangles;frame++;if(frame%6===0)updateHUD();
       const previousQuality=display.effectiveQuality;
@@ -329,7 +337,7 @@
     createFullscreenControls({onChange:()=>{resizePending=true;},onExit:pauseGame});
     applyEffectsQuality();
     const combatSnapshot=()=>Object.assign({},combat,{weapon:Object.assign({},combat.weapon),loadout:Object.fromEntries(Object.entries(combat.loadout).map(([slot,item])=>[slot,Object.assign({},item,{weapon:Object.assign({},item.weapon)})]))});
-    const getState=()=>({map:mapId,tactical,mission:Object.assign(mission.snapshot(),{layout:mission.layout()}),runStats:{...runStats},accuracy:FPSRules.accuracy(combat),difficulty,ready,screen,locked,ads,time,elapsed,wave,minimap:minimap.getState(),deathCount,settings:{sensitivity,aimMode,crosshairStyle,quality:display.quality,renderScale:display.renderScale,adaptive:display.adaptive},spawn:lastSpawn?Object.assign({},lastSpawn):null,combat:combatSnapshot(),player:{position:camera.position.toArray(),feetY:player.position.y,grounded:player.grounded,yaw:player.yaw,pitch:player.pitch,vy:player.vy,velocity:{...player.velocity},speed:player.speed,precisionSpeed:player.precisionSpeed,walking:player.walking,sprinting:player.sprinting,footsteps:playerFootsteps,footstepListeners},enemies:enemies.stats(),targets:enemies.getTargets(),effects:effects.stats(),metrics:{fps,frameMs,drawCalls,triangles,...display.snapshot(),resolution:[renderer.domElement.width,renderer.domElement.height],resolutionLimited:renderDimensions.limited},errors:errors.slice()});
+    const getState=()=>({map:mapId,tactical,mission:Object.assign(mission.snapshot(),{layout:mission.layout()}),runStats:{...runStats},accuracy:FPSRules.accuracy(combat),difficulty,ready,screen,locked,ads,time,elapsed,wave,minimap:minimap.getState(),deathCount,settings:{sensitivity,aimMode,crosshairStyle,meleeStyle,quality:display.quality,renderScale:display.renderScale,adaptive:display.adaptive},spawn:lastSpawn?Object.assign({},lastSpawn):null,combat:combatSnapshot(),player:{position:camera.position.toArray(),feetY:player.position.y,grounded:player.grounded,yaw:player.yaw,pitch:player.pitch,vy:player.vy,velocity:{...player.velocity},speed:player.speed,precisionSpeed:player.precisionSpeed,walking:player.walking,sprinting:player.sprinting,footsteps:playerFootsteps,footstepListeners},enemies:enemies.stats(),targets:enemies.getTargets(),effects:effects.stats(),metrics:{fps,frameMs,drawCalls,triangles,...display.snapshot(),resolution:[renderer.domElement.width,renderer.domElement.height],resolutionLimited:renderDimensions.limited},errors:errors.slice()});
     window.CopperYardFPS={getState:()=>Object.assign(getState(),{feedback:ui.getFeedbackState(),melee:Object.assign({},meleeAttack,{damage:FPSRules.knifeAttack(meleeAttack.mode).damage,hitDelay:FPSRules.knifeAttack(meleeAttack.mode).hitDelay}),viewModel:viewModel.getState()}),getCareer:()=>{syncCareer();return career.snapshot();},openCareer,exportCareer,start:startGame,restart:startGame,pause:pauseGame,resume:resumeGame,setQuality,setSensitivity,setCrosshairStyle,setRenderScale,setAdaptive,sampleTerrain:(x,z)=>world.height(x,z),debug:{
       setPlayer(o={}){const x=finite(o.x,player.position.x),z=finite(o.z,player.position.z),yaw=finite(o.yaw,player.yaw),pitch=finite(o.pitch,player.pitch);if(Number.isFinite(o.x)||Number.isFinite(o.z)){player.reset(x,z,yaw);footstepDistance=0;}player.yaw=yaw;player.pitch=clamp(pitch,-1.42,1.42);player.recoil=0;updateEye(0);},
       damagePlayer:amount=>takeDamage(amount),setEnemyFire:v=>enemyFire=!!v,getTargets:()=>enemies.getTargets(),getColliderSample:()=>arena.colliders.filter(c=>c.kind==='tree').slice(0,40),traceShot:trace,fire:shoot,

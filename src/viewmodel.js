@@ -12,6 +12,9 @@
       dark:new THREE.MeshStandardMaterial({color:0x28322f,roughness:.57,metalness:.38}),
       edge:new THREE.MeshStandardMaterial({color:0x788079,roughness:.43,metalness:.50}),
       blade:new THREE.MeshStandardMaterial({color:0xa8b2aa,roughness:.32,metalness:.55}),
+      titanium:new THREE.MeshStandardMaterial({color:0x424e54,roughness:.36,metalness:.72}),
+      copper:new THREE.MeshStandardMaterial({color:0xc88450,roughness:.32,metalness:.72}),
+      honed:new THREE.MeshStandardMaterial({color:0xd1dbde,roughness:.25,metalness:.78,side:THREE.DoubleSide}),
       rubber:new THREE.MeshStandardMaterial({color:0x17201b,roughness:.95,metalness:0}),
       amber:new THREE.MeshStandardMaterial({color:0xc99d50,roughness:.5,metalness:.5}),
       glove:new THREE.MeshStandardMaterial({color:0x66715a,roughness:1,metalness:0}),
@@ -131,6 +134,48 @@
     box(knife,materials.glove,-.030,.004,-.077,.025,.057,.064,.03,0,.24);
     box(knife,materials.rubber,.008,-.096,-.061,.078,.024,.076);
     box(knife,materials.sleeve,.035,-.177,.015,.108,.18,.126,-.48,0,-.16);
+    // A separate balisong keeps the original knife intact. The safe handle is
+    // held at a fixed hinge; the blade carrier and free handle rotate about
+    // their real pins, so folding never stretches or detaches the assembly.
+    const butterfly=new THREE.Group();butterfly.name='butterfly-weapon';butterfly.visible=false;butterfly.rotation.z=.32;rig.add(butterfly);
+    const handleShape=new THREE.Shape();handleShape.moveTo(-.022,.014);handleShape.lineTo(.022,.014);handleShape.lineTo(.021,-.246);handleShape.quadraticCurveTo(.020,-.271,0,-.278);handleShape.quadraticCurveTo(-.020,-.271,-.021,-.246);handleShape.closePath();
+    for(let i=0;i<4;i++){const y=-.048-i*.046,hole=new THREE.Path();hole.moveTo(-.009,y);hole.lineTo(-.009,y-.026);hole.lineTo(.009,y-.026);hole.lineTo(.009,y);hole.closePath();handleShape.holes.push(hole);}
+    const handleGeometry=new THREE.ExtrudeGeometry(handleShape,{depth:.005,steps:1,bevelEnabled:true,bevelSegments:1,bevelSize:.0015,bevelThickness:.001});
+    function butterflyHandle(parent,name){
+      const handle=new THREE.Group();handle.name=name;parent.add(handle);
+      for(const z of [-.021,.016]){const plate=new THREE.Mesh(handleGeometry,materials.titanium);plate.position.z=z;handle.add(plate);}
+      box(handle,materials.copper,-.018,-.143,0,.005,.226,.034);
+      box(handle,materials.copper,.018,-.143,0,.005,.226,.034);
+      box(handle,materials.dark,0,-.252,0,.032,.018,.034);
+      cylinder(handle,materials.copper,0,0,0,.014,.050);
+      cylinder(handle,materials.edge,0,0,.028,.007,.007);
+      box(handle,materials.dark,0,0,.033,.007,.0018,.002,0,0,.3);
+      cylinder(handle,materials.edge,0,-.247,.024,.005,.004);
+      return handle;
+    }
+    const safeHandle=butterflyHandle(butterfly,'butterfly-safe-handle');safeHandle.position.set(-.027,.065,-.105);
+    const bladeCarrier=new THREE.Group();bladeCarrier.name='butterfly-blade-carrier';bladeCarrier.position.copy(safeHandle.position);butterfly.add(bladeCarrier);
+    const butterflyBladeShape=new THREE.Shape();butterflyBladeShape.moveTo(.006,-.014);butterflyBladeShape.lineTo(.047,-.014);butterflyBladeShape.lineTo(.049,.170);butterflyBladeShape.lineTo(.025,.258);butterflyBladeShape.lineTo(.005,.185);butterflyBladeShape.closePath();
+    const butterflyBladeGeometry=new THREE.ExtrudeGeometry(butterflyBladeShape,{depth:.010,steps:1,bevelEnabled:true,bevelSegments:1,bevelSize:.002,bevelThickness:.0015});
+    const butterflyBlade=new THREE.Mesh(butterflyBladeGeometry,materials.blade);butterflyBlade.position.z=-.005;bladeCarrier.add(butterflyBlade);
+    // A long honed bevel and spine facet catch the light during each wrist turn.
+    const bevelShape=new THREE.Shape();bevelShape.moveTo(.038,.025);bevelShape.lineTo(.049,.170);bevelShape.lineTo(.025,.258);bevelShape.lineTo(.028,.180);bevelShape.lineTo(.028,.025);bevelShape.closePath();
+    const bevelGeometry=new THREE.ShapeGeometry(bevelShape);
+    for(const z of [-.008,.008]){const bevel=new THREE.Mesh(bevelGeometry,materials.honed);bevel.position.z=z;bladeCarrier.add(bevel);}
+    box(bladeCarrier,materials.dark,.016,.105,.008,.004,.115,.002);
+    box(bladeCarrier,materials.copper,.026,.033,.009,.014,.009,.002);
+    cylinder(bladeCarrier,materials.edge,.027,-.018,0,.006,.038);
+    const freeHandle=butterflyHandle(bladeCarrier,'butterfly-free-handle');freeHandle.position.x=.054;
+    box(freeHandle,materials.copper,0,-.282,0,.012,.028,.014);
+    box(freeHandle,materials.edge,-.010,-.296,0,.031,.008,.014);
+    const butterflyGrip=new THREE.Group();butterflyGrip.name='butterfly-grip';butterfly.add(butterflyGrip);
+    box(butterflyGrip,materials.glove,-.008,-.075,-.054,.078,.112,.078,.03,0,-.10);
+    box(butterflyGrip,materials.grip,.026,-.068,-.082,.028,.086,.043,.02,0,-.08);
+    box(butterflyGrip,materials.glove,-.040,-.020,-.087,.025,.067,.053,.04,0,.25);
+    box(butterflyGrip,materials.rubber,-.005,-.137,-.041,.079,.027,.077);
+    box(butterflyGrip,materials.sleeve,.020,-.222,.027,.108,.18,.126,-.48,0,-.16);
+    const butterflyFingers=[];
+    for(let i=0;i<3;i++){const finger=new THREE.Group();finger.position.set(.015,-.047-i*.029,-.060);butterflyGrip.add(finger);box(finger,materials.glove,.025,0,-.021,.053,.024,.028,0,.12,0);box(finger,materials.grip,.046,0,-.041,.024,.023,.036,0,-.15,0);butterflyFingers.push(finger);}
     const muzzle=new THREE.Group();muzzle.position.set(0,.01,-1.0);gun.add(muzzle);
     const flash=new THREE.Mesh(new THREE.ConeGeometry(.036,.13,5),materials.flash);flash.rotation.x=-Math.PI/2;muzzle.add(flash);
     const flashCore=new THREE.Mesh(new THREE.ConeGeometry(.019,.09,5),materials.flashCore);flashCore.rotation.x=-Math.PI/2;flashCore.position.z=.009;muzzle.add(flashCore);muzzle.visible=false;
@@ -200,8 +245,33 @@
         [1.2,-.14,.025,-.10,-.16,.65,.28],
         [1.5,-.14,.025,-.10,-.16,.65,.28],
         [1.95,0,0,0,0,0,0]
+      ]),
+      butterfly:makePoseMotion(2.8,0,0,[
+        [0,0,0,0,0,0,0],
+        [.30,-.15,.13,-.12,.12,-.28,-.50],
+        [.66,-.18,.16,-.14,.06,-.42,-.84],
+        [1.02,-.18,.17,-.14,.14,-.30,-.30],
+        [1.34,-.17,.16,-.14,.12,.16,.28],
+        [1.74,-.15,.13,-.12,-.10,.46,-.40],
+        [2.10,-.15,.11,-.10,-.12,.58,-.48],
+        [2.35,-.15,.11,-.10,-.12,.58,-.48],
+        [2.8,0,0,0,0,0,0]
       ])
     };
+    // Joint angles are relative to their pins. A controlled close, a held
+    // folded silhouette, then an opening fan give the two handles real work.
+    // The last three channels are unused; reuse the allocation-free sampler.
+    const butterflyMotion=makePoseMotion(2.8,0,0,[
+      [0,0,0,0,0,0,0],
+      [.24,-.20,.65,.65,0,0,0],
+      [.58,-1.85,2.30,1,0,0,0],
+      [.86,-Math.PI,Math.PI,1,0,0,0],
+      [1.12,-Math.PI,Math.PI,1,0,0,0],
+      [1.42,-2.10,1.25,1,0,0,0],
+      [1.72,-.55,-.65,.85,0,0,0],
+      [2.05,0,0,0,0,0,0],
+      [2.8,0,0,0,0,0,0]
+    ]);
     function sampleMotion(motion,elapsed,offset){
       let index=0;while(index<motion.keys.length-2&&elapsed>motion.keys[index+1][0])index++;
       const from=motion.keys[index],to=motion.keys[index+1],span=to[0]-from[0],t=(elapsed-from[0])/span,t2=t*t,t3=t2*t;
@@ -209,13 +279,22 @@
       for(let axis=0;axis<6;axis++)offset[axis]=h00*from[axis+1]+h10*span*motion.slopes[index][axis]+h01*to[axis+1]+h11*span*motion.slopes[index+1][axis];
     }
     const inspectOffset=new Float64Array(6);
+    const butterflyOffset=new Float64Array(6);
+    let meleeStyle='classic';
     let inspectActive=false,inspectElapsed=0,inspectSlot='primary',inspectBlocked=false;
-    function cancelInspect(){inspectActive=false;inspectElapsed=0;inspectOffset.fill(0);}
+    function inspectionMotion(){return inspectMotions[inspectSlot==='knife'&&meleeStyle==='butterfly'?'butterfly':inspectSlot];}
+    function resetButterfly(){bladeCarrier.rotation.z=0;freeHandle.rotation.z=0;for(const finger of butterflyFingers)finger.rotation.y=0;}
+    function cancelInspect(){inspectActive=false;inspectElapsed=0;inspectOffset.fill(0);resetButterfly();}
     function updateInspection(dt){
-      inspectOffset.fill(0);if(!inspectActive)return;
-      const motion=inspectMotions[inspectSlot];inspectElapsed=Math.min(motion.duration,inspectElapsed+dt);
+      inspectOffset.fill(0);resetButterfly();if(!inspectActive)return;
+      const motion=inspectionMotion();inspectElapsed=Math.min(motion.duration,inspectElapsed+dt);
       if(inspectElapsed>=motion.duration){inspectActive=false;return;}
       sampleMotion(motion,inspectElapsed,inspectOffset);
+      if(inspectSlot==='knife'&&meleeStyle==='butterfly'){
+        sampleMotion(butterflyMotion,inspectElapsed,butterflyOffset);
+        bladeCarrier.rotation.z=butterflyOffset[0];freeHandle.rotation.z=butterflyOffset[1];
+        for(let i=0;i<butterflyFingers.length;i++)butterflyFingers[i].rotation.y=-butterflyOffset[2]*(.75+i*.12);
+      }
     }
     const knifeOffset=new Float64Array(6);
     let meleeActive=false,meleeElapsed=0,meleeMode='light',meleeJustStarted=false;
@@ -232,8 +311,9 @@
     let time=0,adsBlend=0,motionBlend=0,sprintBlend=0,kick=0,kickVelocity=0,flashTime=0,roll=0,switchAmount=0;
     let activeSlot='primary',desiredSlot='primary';
     function slotOf(value,fallback='primary'){return value==='knife'||value==='melee'?'knife':value==='secondary'||value==='pistol'?'secondary':value==='primary'||value==='rifle'?'primary':fallback;}
+    function updateWeaponVisibility(){gun.visible=activeSlot==='primary';pistol.visible=activeSlot==='secondary';knife.visible=activeSlot==='knife'&&meleeStyle==='classic';butterfly.visible=activeSlot==='knife'&&meleeStyle==='butterfly';}
     function selectSlot(slot){
-      activeSlot=slot;gun.visible=slot==='primary';pistol.visible=slot==='secondary';knife.visible=slot==='knife';
+      activeSlot=slot;updateWeaponVisibility();
       adsBlend=0;kick=0;kickVelocity=0;roll=0;flashTime=0;cancelMelee();cancelInspect();muzzle.visible=false;flashLight.intensity=0;
       const owner=slot==='secondary'?pistol:gun;owner.add(muzzle);owner.add(flashLight);
       muzzle.position.set(0,slot==='secondary'?.027:.01,slot==='secondary'?-.462:-1);
@@ -241,6 +321,8 @@
     }
     function update(dt,state={}){
       dt=Math.max(0,Math.min(.05,Number(dt)||0));time+=dt;
+      const requestedStyle=state.meleeStyle===undefined?meleeStyle:state.meleeStyle==='butterfly'?'butterfly':'classic';
+      if(requestedStyle!==meleeStyle){meleeStyle=requestedStyle;cancelMelee();cancelInspect();updateWeaponVisibility();}
       // Paused/dead views keep the pose, but transient muzzle light must not freeze.
       if(dt===0)flashTime=0;
       const requested=slotOf(state.activeSlot||state.weaponKind,desiredSlot);
@@ -312,7 +394,7 @@
       resize(width,height){camera.aspect=Math.max(1,width)/Math.max(1,height);camera.updateProjectionMatrix();},
       cancelMelee,
       // Snapshot only: diagnostics can inspect timing without mutating the rig.
-      getState(){const motion=knifeMotions[meleeMode];return{activeSlot,adsBlend,inspection:{active:inspectActive,elapsed:inspectElapsed,duration:inspectMotions[inspectSlot].duration,slot:inspectSlot},melee:{active:meleeActive,mode:meleeMode,elapsed:meleeElapsed,duration:motion.duration,hitTime:motion.hitTime,phase:!meleeActive?'idle':meleeElapsed<motion.hitTime?'windup':meleeElapsed<motion.recoveryTime?'strike':'recover'},pose:{position:[rig.position.x,rig.position.y,rig.position.z],rotation:[rig.rotation.x,rig.rotation.y,rig.rotation.z]}};},
+      getState(){const motion=knifeMotions[meleeMode];return{activeSlot,meleeStyle,adsBlend,inspection:{active:inspectActive,elapsed:inspectElapsed,duration:inspectionMotion().duration,slot:inspectSlot},melee:{active:meleeActive,mode:meleeMode,elapsed:meleeElapsed,duration:motion.duration,hitTime:motion.hitTime,phase:!meleeActive?'idle':meleeElapsed<motion.hitTime?'windup':meleeElapsed<motion.recoveryTime?'strike':'recover'},pose:{position:[rig.position.x,rig.position.y,rig.position.z],rotation:[rig.rotation.x,rig.rotation.y,rig.rotation.z]}};},
       reset(){time=0;adsBlend=0;motionBlend=0;sprintBlend=0;kick=0;kickVelocity=0;flashTime=0;roll=0;cancelMelee();cancelInspect();inspectSlot='primary';inspectBlocked=false;meleeMode='light';switchAmount=0;desiredSlot='primary';selectSlot('primary');update(0,{activeSlot:'primary'});}
     };
   };

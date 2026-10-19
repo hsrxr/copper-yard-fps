@@ -8,7 +8,7 @@
     ['menuCrosshairPicker','pauseCrosshairPicker'].forEach(id=>nodes[id]=$(id));
     ['pauseQualitySelect','menuRenderScale','pauseRenderScale','menuAdaptiveEffects','pauseAdaptiveEffects','menuRenderInfo','pauseRenderInfo'].forEach(id=>nodes[id]=$(id));
     ['menuCareerButton','pauseCareerButton','deadCareerButton','careerScreen','careerCloseButton','careerExportButton','careerStorage','careerRuns','careerKills','careerHeadshots','careerBestScore','careerBestWave','careerSeconds','careerRecordsTab','careerAchievementsTab','careerRecordsPanel','careerAchievementsPanel','careerRecordCount','careerAchievementCount','careerActive','careerActiveSummary','careerActiveDetail','careerRecords','careerAchievements','combatConfirm','combatIcon','combatLabel','combatDetail','killFeed0','killFeed1','killFeed2','killFeed3','achievementToast','achievementTitle','achievementDescription'].forEach(id=>nodes[id]=$(id));
-    ['difficultySelect','mapSubtitle','mapTitle','setupDetail','mapHud','huntStatus','huntDetail','dangerStatus','extractStatus','pauseMenuButton','deadMenuButton','resultTitle','resultCopy','resultEyebrow','careerGroups'].forEach(id=>nodes[id]=$(id));
+    ['difficultySelect','meleeStyleSelect','mapSubtitle','mapTitle','setupDetail','mapHud','huntStatus','huntDetail','dangerStatus','extractStatus','pauseMenuButton','deadMenuButton','resultTitle','resultCopy','resultEyebrow','careerGroups'].forEach(id=>nodes[id]=$(id));
     ['mapBrief','missionNote','menuAimMode','pauseAimMode','pauseNewMissionButton','newMissionButton','missionSteps','missionStep0','missionStep1','missionStep2','missionTrack','missionFill','missionMedical','aimReadiness','aimReadinessLabel','aimReadinessFill','waveCaption','enemyCaption','enemyUnit','radarEnemyLabel','radarWarningLabel','resultWaveLabel','resultTimeLabel','resultAccuracy','resultDamage','resultTacticalStats','pauseCopy','restartLabel'].forEach(id=>nodes[id]=$(id));
     const cache=new Map(),timers={};let ready=false,muted=false,currentScreen='menu',careerOpen=false,returnFocus=null,careerTab='records',aimMode='hold';
     let feedback={kind:null,damage:0,enemyName:'',points:0,visible:false,expiresAt:0,protectedUntil:0};
@@ -17,6 +17,7 @@
     function later(key,callback,delay){clearTimeout(timers[key]);timers[key]=setTimeout(callback,delay);}
     function invoke(name,...args){if(typeof actions[name]==='function')return actions[name](...args);}
     function setAimMode(mode){aimMode=mode==='toggle'?'toggle':'hold';for(const id of ['menuAimMode','pauseAimMode'])if(nodes[id])nodes[id].value=aimMode;return aimMode;}
+    function setMeleeStyle(value){const style=value==='butterfly'?'butterfly':'classic';nodes.meleeStyleSelect.value=style;text('slotKnifeName',style==='butterfly'?'B-02 蝴蝶刀':'K-01 匕首');return style;}
     function setCrosshairStyle(value){
       const style=['classic','dot','cross','gap'].includes(value)?value:'classic';
       nodes.crosshair.dataset.style=style;
@@ -73,6 +74,7 @@
     for(const id of ['pauseNewMissionButton','newMissionButton'])nodes[id].addEventListener('click',()=>invoke('newMission'));
     nodes.soundButton.addEventListener('click',()=>{const result=invoke('mute');muted=typeof result==='boolean'?result:!muted;nodes.soundButton.setAttribute('aria-pressed',String(muted));text('soundLabel',muted?'声音关闭':'声音开启');});
     nodes.difficultySelect.addEventListener('change',()=>invoke('setDifficulty',nodes.difficultySelect.value));
+    nodes.meleeStyleSelect.addEventListener('change',()=>invoke('setMeleeStyle',nodes.meleeStyleSelect.value));
     for(const id of ['pauseMenuButton','deadMenuButton'])nodes[id].addEventListener('click',()=>invoke('menu'));
     nodes.retry.addEventListener('click',()=>location.reload());
     for(const id of ['menuCareerButton','pauseCareerButton','deadCareerButton'])nodes[id].addEventListener('click',()=>invoke('openCareer'));
@@ -245,9 +247,9 @@
         text('mapTitle','铜港货场');text('mapSubtitle','COPPER YARD · 动态交战');text('mapHud','铜港 / 战术任务 / '+(difficulty==='hard'?'困难':'标准'));
         text('setupDetail','三个目标 · 奔跑有声 / Shift 静步 · 急停点射');
         nodes.mapBrief.innerHTML='观察巡逻，预瞄拐角；开火后及时换位。<br><strong>突破检查点 → 读取终端 → 北门撤离。</strong><br>敌人会听声警戒、换位压制；利用掩体换弹。';
-        nodes.missionNote.innerHTML='<span>行动要点</span><br>WASD 默认奔跑 · Shift 无声静步。<br>松键刹停，反向轻点急停；低速时恢复首发精度。<br>蓝色火花表示护甲；击碎头盔后瞄准裸露头部。<br><span class="menu-key-hint">1 步枪 · 2 手枪 · 3 刀 · 按住 E 交互</span>';
+        nodes.missionNote.innerHTML='<span>行动要点</span><br>WASD 默认奔跑 · Shift 无声静步。<br>松键刹停，反向轻点急停；低速时恢复首发精度。<br>蓝色火花表示护甲；击碎头盔后瞄准裸露头部。<br><span class="menu-key-hint">1 步枪 · 2 手枪 · 3 刀 · Y 检视 · 按住 E 交互</span>';
       },
-      setScreen,update,setSensitivity,setAimMode,setCrosshairStyle,setDisplaySettings,updateDisplayStatus,showCareer,closeCareer,combatFeedback,achievement,resetFeedback:clearFeedback,isCareerOpen:()=>careerOpen,
+      setScreen,update,setSensitivity,setAimMode,setMeleeStyle,setCrosshairStyle,setDisplaySettings,updateDisplayStatus,showCareer,closeCareer,combatFeedback,achievement,resetFeedback:clearFeedback,isCareerOpen:()=>careerOpen,
       getFeedbackState(){return Object.freeze({...feedback,feed:Object.freeze(killFeed.map(item=>Object.freeze({...item}))),achievement:achievementActive?Object.freeze({...achievementActive}):null,queuedAchievements:achievementQueue.length});},
       setReady(value){ready=Boolean(value);nodes.startButton.disabled=!ready;nodes.loading.hidden=ready;if(ready){nodes.loading.classList.remove('is-error');nodes.retry.hidden=true;}},
       toast(message,tone='upgrade'){text('upgradeToast',message);nodes.upgradeToast.dataset.tone=tone;nodes.upgradeToast.classList.add('on');later('toast',()=>nodes.upgradeToast.classList.remove('on'),2600);},
