@@ -8,7 +8,11 @@
 
 ## 开始游戏
 
-下载仓库后，用桌面 Chrome 或 Edge 打开 **`index.html`**，点击“开始行动”。需要支持 WebGL2 的浏览器和键盘、鼠标。进入游戏后会捕获鼠标；按 Esc 暂停并释放鼠标。
+**[在线试玩铜港货场](https://hsrxr.github.io/copper-yard-fps/)** — 打开链接，点击“开始行动”即可游玩。
+
+使用支持 WebGL2 的桌面 Chrome 或 Edge，搭配键盘、鼠标。进入游戏后会捕获鼠标；按 Esc 暂停并释放鼠标。
+
+离线游玩时，下载仓库后直接打开 **`index.html`** 即可。
 
 也可以通过本地服务运行：
 
@@ -67,6 +71,8 @@ node --test qa/*.test.cjs
 ```
 
 `build.py` 将源码、Three.js 和第三方许可证内嵌到 `index.html`。修改 `src/` 后重新构建即可，不要只修改生成的 HTML。
+
+在线版本由 GitHub Pages 从 `main` 分支根目录发布。更新游戏后，将源码和重新构建的 `index.html` 一并提交、推送到 `main`，GitHub 会自动更新试玩页；根目录的 `.nojekyll` 让页面按静态文件发布。
 
 浏览器验收：
 
