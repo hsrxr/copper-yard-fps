@@ -74,19 +74,48 @@ function createCombatEffects(ctx){
   reset();return{group,tracer,impact,drop,dropHealth,update,reset,stats:()=>({drops:drops.filter(d=>d.active).length,healthDrops:drops.filter(d=>d.active&&d.kind==='health').length,pickedAmmo:totalPickups,pickedHealth:totalHealth,tracerCapacity:TC,impactCapacity:IC}),getDrops:()=>drops.filter(d=>d.active).map(d=>({kind:d.kind,x:d.x,y:d.y,z:d.z,amount:d.amount}))};
 }
 
-/* Procedural Web Audio: shared noise buffer, voices disconnected after playback. */
+/* Selected PCM recordings and procedural cues share mute control. Buffers are
+ * cached on activation; all voices disconnect after playback. */
 function createGameAudio(){
-  let ac=null,master=null,noise=null,muted=false,voices=0;
+  let ac=null,master=null,legacy=null,selected=null,noise=null,muted=false,voices=0;
+  const samples=Object.create(null);
   const ear={x:0,y:0,z:0,fx:0,fz:-1};
   const coordinate=(p,key,index)=>p&&Number.isFinite(p[key])?p[key]:p&&Number.isFinite(p[index])?p[index]:0;
   function listener(position,forward){ear.x=coordinate(position,'x',0);ear.y=coordinate(position,'y',1);ear.z=coordinate(position,'z',2);if(forward){const x=coordinate(forward,'x',0),z=coordinate(forward,'z',2),length=Math.hypot(x,z)||1;ear.fx=x/length;ear.fz=z/length;}}
-  function init(){if(!ac){const C=window.AudioContext||window.webkitAudioContext;if(!C)return;ac=new C();master=ac.createGain();master.gain.value=muted?0:.2;master.connect(ac.destination);noise=ac.createBuffer(1,Math.ceil(ac.sampleRate*.5),ac.sampleRate);const d=noise.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;}if(ac.state==='suspended')ac.resume().catch(()=>{});}
+  function init(){
+    if(!ac){
+      const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+      ac=new C();master=ac.createGain();master.gain.value=muted?0:1;master.connect(ac.destination);
+      legacy=ac.createGain();legacy.gain.value=.2;legacy.connect(master);
+      selected=ac.createGain();selected.gain.value=.55;selected.connect(master);
+      noise=ac.createBuffer(1,Math.ceil(ac.sampleRate*.5),ac.sampleRate);const d=noise.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+      // Decode embedded PCM synchronously once, including for file:// use.
+      // A first shot never waits for a network request or decodeAudioData.
+      let embedded={};try{embedded=JSON.parse(document.getElementById('combat-audio-samples')?.textContent||'{}');}catch{}
+      for(const key of ['shot','hit','headshot','kill','headshotKill']){
+        try{
+          const entry=embedded[key];if(!entry||!Number.isInteger(entry.sampleRate)||entry.sampleRate<8000||entry.sampleRate>192000)continue;
+          const bytes=atob(entry.pcm16);if(!bytes.length||bytes.length%2)continue;
+          const buffer=ac.createBuffer(1,bytes.length/2,entry.sampleRate),pcm=buffer.getChannelData(0);
+          for(let i=0;i<pcm.length;i++){const value=bytes.charCodeAt(i*2)|(bytes.charCodeAt(i*2+1)<<8);pcm[i]=(value>=32768?value-65536:value)/32768;}
+          samples[key]=buffer;
+        }catch{/* A damaged optional sample falls back to the original cue. */}
+      }
+    }
+    if(ac.state==='suspended')ac.resume().catch(()=>{});
+  }
+  function sample(key,volume){
+    const buffer=samples[key];if(!ac||!buffer)return false;
+    if(muted||voices>=72)return true;
+    voices++;const s=ac.createBufferSource(),g=ac.createGain();s.buffer=buffer;g.gain.value=volume;s.connect(g);g.connect(selected);
+    s.onended=()=>{s.disconnect();g.disconnect();voices=Math.max(0,voices-1);};s.start(ac.currentTime);return true;
+  }
   function output(position){
-    if(!position)return{node:master,dispose(){}};
+    if(!position)return{node:legacy,dispose(){}};
     const dx=coordinate(position,'x',0)-ear.x,dz=coordinate(position,'z',2)-ear.z,dy=coordinate(position,'y',1)-ear.y,distance=Math.hypot(dx,dy,dz),flat=Math.hypot(dx,dz)||1;
     const gain=ac.createGain();gain.gain.value=1/(1+distance/32);
-    if(typeof ac.createStereoPanner==='function'){const pan=ac.createStereoPanner();pan.pan.value=Math.max(-.95,Math.min(.95,(-ear.fz*dx+ear.fx*dz)/flat));gain.connect(pan);pan.connect(master);return{node:gain,dispose(){gain.disconnect();pan.disconnect();}};}
-    gain.connect(master);return{node:gain,dispose(){gain.disconnect();}};
+    if(typeof ac.createStereoPanner==='function'){const pan=ac.createStereoPanner();pan.pan.value=Math.max(-.95,Math.min(.95,(-ear.fz*dx+ear.fx*dz)/flat));gain.connect(pan);pan.connect(legacy);return{node:gain,dispose(){gain.disconnect();pan.disconnect();}};}
+    gain.connect(legacy);return{node:gain,dispose(){gain.disconnect();}};
   }
   function tone(freq,duration,vol,type='sine',end=0,position=null,delay=0){
     if(!ac||muted||voices>=72)return;voices++;const t=ac.currentTime+delay,o=ac.createOscillator(),g=ac.createGain(),route=output(position);o.type=type;o.frequency.setValueAtTime(freq,t);if(end)o.frequency.exponentialRampToValueAtTime(end,t+duration);g.gain.setValueAtTime(Math.max(.001,vol),t);g.gain.exponentialRampToValueAtTime(.001,t+duration);o.connect(g);g.connect(route.node);o.onended=()=>{o.disconnect();g.disconnect();route.dispose();voices=Math.max(0,voices-1);};o.start(t);o.stop(t+duration+.005);
@@ -95,6 +124,7 @@ function createGameAudio(){
     if(!ac||muted||voices>=72)return;voices++;const t=ac.currentTime+delay,s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain(),route=output(position);s.buffer=noise;f.type=type;f.frequency.value=frequency;f.Q.value=.75;g.gain.setValueAtTime(Math.max(.001,vol),t);g.gain.exponentialRampToValueAtTime(.001,t+duration);s.connect(f);f.connect(g);g.connect(route.node);s.onended=()=>{s.disconnect();f.disconnect();g.disconnect();route.dispose();voices=Math.max(0,voices-1);};s.start(t);s.stop(t+duration+.005);
   }
   function shot(enemy=false,slot='primary',position=null){
+    if(!enemy&&sample('shot',.55))return;
     const pistol=slot==='secondary'||slot==='pistol',level=enemy?.58:1,source=enemy?position:null;
     // Attack crack, low receiver body, then a quiet mechanical return. The
     // pistol is short and sharp; the rifle has a lower, longer gas tail.
@@ -116,11 +146,12 @@ function createGameAudio(){
   function feedback(kind){
     // One result chooses one authored pattern. A headshot kill does not also
     // trigger unrelated body/head/kill notifications.
+    if(kind!=='armor'&&kind!=='armorBreak'&&sample(['headshotKill','kill','headshot'].includes(kind)?kind:'hit',.75))return;
     if(kind==='armor'||kind==='armorBreak'){noiseVoice(.055,.13,3200,'highpass');tone(kind==='armorBreak'?2450:1850,.085,.13,'triangle',780);if(kind==='armorBreak')noiseVoice(.15,.1,1700,'highpass',null,.035);}
     else if(kind==='headshotKill'){tone(1720,.075,.16,'sine',2250);tone(610,.19,.17,'triangle',175,null,.045);}
     else if(kind==='kill'){noiseVoice(.035,.07,1500,'bandpass');tone(460,.16,.19,'triangle',130);}
     else if(kind==='headshot'){tone(1650,.065,.14,'sine',2100);tone(900,.06,.045,'sine',750,null,.025);}
     else{noiseVoice(.033,.08,680,'lowpass');tone(570,.043,.075,'sine',390);}
   }
-  return{init,shot,cue,listener,feedback,melee(mode='light'){const heavy=mode==='heavy';tone(heavy?240:340,heavy?.22:.14,heavy?.14:.10,'triangle',heavy?45:70);},hit(head){feedback(head?'headshot':'hit');},reload(){tone(420,.08,.14,'square',180);},pickup(){tone(700,.12,.2,'sine',1100);},upgrade(){tone(520,.2,.2,'triangle',1400);},hurt(){tone(90,.18,.3,'sine',40);},death(){tone(150,.7,.4,'triangle',25);},jump(){tone(130,.08,.08,'sine',80);},mute(){muted=!muted;if(master)master.gain.value=muted?0:.2;return muted;}};
+  return{init,shot,cue,listener,feedback,melee(mode='light'){const heavy=mode==='heavy';tone(heavy?240:340,heavy?.22:.14,heavy?.14:.10,'triangle',heavy?45:70);},hit(head){feedback(head?'headshot':'hit');},reload(){tone(420,.08,.14,'square',180);},pickup(){tone(700,.12,.2,'sine',1100);},upgrade(){tone(520,.2,.2,'triangle',1400);},hurt(){tone(90,.18,.3,'sine',40);},death(){tone(150,.7,.4,'triangle',25);},jump(){tone(130,.08,.08,'sine',80);},mute(){muted=!muted;if(master)master.gain.value=muted?0:1;return muted;}};
 }

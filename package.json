@@ -8,7 +8,8 @@
     "serve": "python -m http.server 8080 --bind 127.0.0.1",
     "test": "node --test qa/*.test.cjs",
     "test:browser": "node qa/tactical-mission.verify.cjs",
-    "test:fullscreen": "node qa/fullscreen.verify.cjs"
+    "test:fullscreen": "node qa/fullscreen.verify.cjs",
+    "test:audio": "node qa/selected-audio.verify.cjs"
   },
   "engines": {
     "node": ">=20"

@@ -55,6 +55,8 @@ python -m http.server 8080 --bind 127.0.0.1
 
 画质效果与渲染分辨率独立：分辨率支持 50% / 75% / 100% / 125% / 150%，自动调整只降低特效。鼠标优先使用原始输入，浏览器明确不支持时回退到普通鼠标锁定。
 
+玩家步枪与手枪使用“C 清脆晶响”开枪音效；身体命中、头部命中、身体击杀和爆头击杀使用“A 干脆竞技”对应反馈。一发攻击只播放实际结果对应的确认声。选定音效随页面内嵌，首次开枪即可播放，离线也可使用。
+
 ### 枪械与精度
 
 | 武器 | 伤害 / 爆头倍率 | 射速 | 弹匣 | 开镜时间 |
@@ -73,7 +75,7 @@ python build.py
 node --test qa/*.test.cjs
 ```
 
-`build.py` 将源码、Three.js 和第三方许可证内嵌到 `index.html`。修改 `src/` 后重新构建即可，不要只修改生成的 HTML。
+`build.py` 将源码、选定音效、Three.js 和第三方许可证内嵌到 `index.html`。修改 `src/` 或 `assets/audio/` 后重新构建即可，不要只修改生成的 HTML。
 
 在线版本由 GitHub Pages 从 `main` 分支根目录发布。更新游戏后，将源码和重新构建的 `index.html` 一并提交、推送到 `main`，GitHub 会自动更新试玩页；根目录的 `.nojekyll` 让页面按静态文件发布。
 
@@ -83,6 +85,7 @@ node --test qa/*.test.cjs
 npm ci
 npm run test:browser
 npm run test:fullscreen
+npm run test:audio
 ```
 
 验收默认尝试已安装的 Chrome，必要时可用 `COPPER_BROWSER` 指定浏览器可执行文件，或用 `COPPER_BROWSER_CHANNEL` 指定 Playwright 通道。也可以先运行 `npx playwright install chromium` 安装测试浏览器。测试结果与截图写入 `qa/artifacts/`，不会作为源码提交。
@@ -97,6 +100,7 @@ npm run test:fullscreen
 - `src/app.js`：输入、游戏流程和渲染调度。
 - `src/hud.js`、`src/viewmodel.js`、`src/shell.html`：界面、持枪表现和页面。
 - `vendor/`：随仓库提供的 Three.js 与许可证。
+- `assets/audio/`：选定的原创开枪与命中反馈音效。
 - `qa/`：逻辑与浏览器测试。
 - `build.py` / `index.html`：构建脚本 / 可直接运行的游戏。
 
