@@ -85,13 +85,13 @@ test('refresh recovers the last checkpoint as abandoned without counting it twic
   assert.equal(twice.totals.runs, 1); assert.equal(twice.records.length, 1); assert.equal(twice.totals.kills, 3);
 });
 
-test('retaining only 100 recent records never truncates lifetime statistics', () => {
+test('retaining only 500 recent records never truncates lifetime statistics', () => {
   const { career: c, disk, advance } = fixture();
-  for (let i = 0; i < 105; i++) { c.begin(); c.sync({ elapsed: 2, kills: 1, score: i }); advance(2000); c.finish('death'); }
+  for (let i = 0; i < 505; i++) { c.begin(); c.sync({ elapsed: 2, kills: 1, score: i }); advance(2000); c.finish('death'); }
   const s = fixture({ storage: disk }).career.snapshot();
-  assert.equal(s.records.length, 100); assert.equal(s.totals.runs, 105);
-  assert.equal(s.totals.kills, 105); assert.equal(s.totals.seconds, 210); assert.equal(s.totals.bestScore, 104);
-  assert.equal(s.records[0].score, 104); assert.equal(s.records[99].score, 5);
+  assert.equal(s.records.length, 500); assert.equal(s.totals.runs, 505);
+  assert.equal(s.totals.kills, 505); assert.equal(s.totals.seconds, 1010); assert.equal(s.totals.bestScore, 504);
+  assert.equal(s.records[0].score, 504); assert.equal(s.records[499].score, 5);
 });
 
 test('frame aggregation is finite and excludes invalid samples', () => {

@@ -120,7 +120,7 @@
     function runSummary(run){return '铜港 / '+(run.difficulty==='hard'?'困难':'标准')+' · 动态战术 · 击杀 '+Math.floor(safeNumber(run.kills))+' · 爆头 '+Math.floor(safeNumber(run.headshots))+' · 目标 '+Math.min(3,Math.floor(safeNumber(run.wave)))+' / 3 · '+duration(run.duration);}
     function showCareer(data={}){
       if(!careerOpen){returnFocus=document.activeElement;careerOpen=true;document.body.dataset.career='open';for(const id of ['menuScreen','pausedScreen','deadScreen'])nodes[id].inert=true;}
-      const totals=data.totals||{},storage=data.storage||{},records=Array.isArray(data.records)?data.records.slice(0,100):[],achievements=Array.isArray(data.achievements)?data.achievements:[];
+      const totals=data.totals||{},storage=data.storage||{},records=Array.isArray(data.records)?data.records.slice(0,500):[],achievements=Array.isArray(data.achievements)?data.achievements:[];
       for(const [id,key]of [['careerRuns','runs'],['careerKills','kills'],['careerHeadshots','headshots'],['careerBestScore','bestScore'],['careerBestWave','bestWave']])text(id,Math.floor(safeNumber(totals[key])).toLocaleString('zh-CN'));
       text('careerSeconds',duration(totals.seconds));text('careerStorage',storage.message||(storage.available===false?'浏览器暂时无法保存档案。本次可查看记录，请及时导出。':'本地保存已开启 · 仅当前浏览器可见'));
       nodes.careerStorage.classList.toggle('unavailable',storage.available===false);text('careerRecordCount',records.length);text('careerAchievementCount',achievements.filter(item=>item.unlocked).length+' / '+achievements.length);

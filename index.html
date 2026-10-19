@@ -92,7 +92,7 @@
       <div class="career-groups" id="careerGroups" aria-label="按难度分别统计的最高分"></div><div class="career-tabs" role="tablist" aria-label="档案内容"><button class="career-tab" id="careerRecordsTab" role="tab" aria-selected="true" aria-controls="careerRecordsPanel">游玩记录 <span id="careerRecordCount">0</span></button><button class="career-tab" id="careerAchievementsTab" role="tab" aria-selected="false" aria-controls="careerAchievementsPanel" tabindex="-1">成就 <span id="careerAchievementCount">0 / 0</span></button></div>
       <div class="career-tabpanel" id="careerRecordsPanel" role="tabpanel" aria-labelledby="careerRecordsTab" tabindex="0"><div class="career-active" id="careerActive" hidden><div class="eyebrow">当前行动 · 尚未结算</div><p id="careerActiveSummary"></p><small id="careerActiveDetail"></small></div><div class="career-records" id="careerRecords"></div></div>
       <div class="career-tabpanel" id="careerAchievementsPanel" role="tabpanel" aria-labelledby="careerAchievementsTab" tabindex="0" hidden><div class="career-achievements" id="careerAchievements"></div></div>
-      <footer class="career-footer"><p>保留最近 100 次游玩记录，累计战绩与成就持续保留。导出包含本地战绩、成就和帧率摘要；不包含录像。清除浏览器数据会删除档案。</p><button class="career-export" id="careerExportButton">导出本地档案</button></footer></div>
+      <footer class="career-footer"><p>保留最近 500 次游玩记录，累计战绩与成就持续保留。导出包含本地战绩、成就和帧率摘要；不包含录像。清除浏览器数据会删除档案。</p><button class="career-export" id="careerExportButton">导出本地档案</button></footer></div>
     </section>
   </div>
   <!-- Three.js r160 MIT License
@@ -1447,7 +1447,7 @@ function createPost(ctx){
  * This is not a replay or cloud save. Clearing site data removes this history. */
 (function () {
   'use strict';
-  const KEY = 'copper-yard-fps.career.v1', MAX = Number.MAX_SAFE_INTEGER;
+  const KEY = 'copper-yard-fps.career.v1', MAX = Number.MAX_SAFE_INTEGER, RECORD_LIMIT = 500;
   const DEFINITIONS = [
     ['first_kill', '首次交锋', '累计击杀 1 名敌人', 1, 'kills'],
     ['kills_25', '货场猎手', '累计击杀 25 名敌人', 25, 'kills'],
@@ -1529,7 +1529,7 @@ function createPost(ctx){
       if (!active) return null;
       evaluate(notify); active.outcome = outcome; active.endedAt = Math.max(active.startedAt, endedAt);
       const finished = active; active = null; totalRecord(finished);
-      records.unshift(finished); if (records.length > 100) records.length = 100;
+      records.unshift(finished); if (records.length > RECORD_LIMIT) records.length = RECORD_LIMIT;
       frameTotalMs = 0; return finished;
     }
     // Read once. Malformed/newer data is preserved intact and explicitly placed
@@ -1549,7 +1549,7 @@ function createPost(ctx){
               sequence = count(s.sequence); checkpointAt = count(s.checkpointAt);
               if (Array.isArray(s.records)) {
                 const ids = new Set();
-                for (let i = 0; i < s.records.length && records.length < 100; i++) {
+                for (let i = 0; i < s.records.length && records.length < RECORD_LIMIT; i++) {
                   if (!s.records[i] || typeof s.records[i] !== 'object' || Array.isArray(s.records[i])) continue;
                   const r = sanitizeRecord(s.records[i], 'recovered-' + i);
                   if (ids.has(r.id)) continue;
@@ -1558,7 +1558,7 @@ function createPost(ctx){
                   records.push(r); totalRecord(r);
                 }
               }
-              // Lifetime totals are independent of the 100-record display cap.
+              // Lifetime totals are independent of the retained-record limit.
               for (const key of Object.keys(totals)) totals[key] = Math.max(totals[key], key === 'seconds' ? number(previous[key]) : count(previous[key]));
               totals.headshots = Math.min(totals.kills, totals.headshots);
               for (const key of Object.keys(lifetime)) lifetime[key] = Math.max(lifetime[key], number(extra[key]));
@@ -3214,7 +3214,7 @@ function createGameAudio(){
     function runSummary(run){return '铜港 / '+(run.difficulty==='hard'?'困难':'标准')+' · 动态战术 · 击杀 '+Math.floor(safeNumber(run.kills))+' · 爆头 '+Math.floor(safeNumber(run.headshots))+' · 目标 '+Math.min(3,Math.floor(safeNumber(run.wave)))+' / 3 · '+duration(run.duration);}
     function showCareer(data={}){
       if(!careerOpen){returnFocus=document.activeElement;careerOpen=true;document.body.dataset.career='open';for(const id of ['menuScreen','pausedScreen','deadScreen'])nodes[id].inert=true;}
-      const totals=data.totals||{},storage=data.storage||{},records=Array.isArray(data.records)?data.records.slice(0,100):[],achievements=Array.isArray(data.achievements)?data.achievements:[];
+      const totals=data.totals||{},storage=data.storage||{},records=Array.isArray(data.records)?data.records.slice(0,500):[],achievements=Array.isArray(data.achievements)?data.achievements:[];
       for(const [id,key]of [['careerRuns','runs'],['careerKills','kills'],['careerHeadshots','headshots'],['careerBestScore','bestScore'],['careerBestWave','bestWave']])text(id,Math.floor(safeNumber(totals[key])).toLocaleString('zh-CN'));
       text('careerSeconds',duration(totals.seconds));text('careerStorage',storage.message||(storage.available===false?'浏览器暂时无法保存档案。本次可查看记录，请及时导出。':'本地保存已开启 · 仅当前浏览器可见'));
       nodes.careerStorage.classList.toggle('unavailable',storage.available===false);text('careerRecordCount',records.length);text('careerAchievementCount',achievements.filter(item=>item.unlocked).length+' / '+achievements.length);

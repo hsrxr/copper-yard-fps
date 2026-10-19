@@ -4,7 +4,7 @@
  * This is not a replay or cloud save. Clearing site data removes this history. */
 (function () {
   'use strict';
-  const KEY = 'copper-yard-fps.career.v1', MAX = Number.MAX_SAFE_INTEGER;
+  const KEY = 'copper-yard-fps.career.v1', MAX = Number.MAX_SAFE_INTEGER, RECORD_LIMIT = 500;
   const DEFINITIONS = [
     ['first_kill', '首次交锋', '累计击杀 1 名敌人', 1, 'kills'],
     ['kills_25', '货场猎手', '累计击杀 25 名敌人', 25, 'kills'],
@@ -86,7 +86,7 @@
       if (!active) return null;
       evaluate(notify); active.outcome = outcome; active.endedAt = Math.max(active.startedAt, endedAt);
       const finished = active; active = null; totalRecord(finished);
-      records.unshift(finished); if (records.length > 100) records.length = 100;
+      records.unshift(finished); if (records.length > RECORD_LIMIT) records.length = RECORD_LIMIT;
       frameTotalMs = 0; return finished;
     }
     // Read once. Malformed/newer data is preserved intact and explicitly placed
@@ -106,7 +106,7 @@
               sequence = count(s.sequence); checkpointAt = count(s.checkpointAt);
               if (Array.isArray(s.records)) {
                 const ids = new Set();
-                for (let i = 0; i < s.records.length && records.length < 100; i++) {
+                for (let i = 0; i < s.records.length && records.length < RECORD_LIMIT; i++) {
                   if (!s.records[i] || typeof s.records[i] !== 'object' || Array.isArray(s.records[i])) continue;
                   const r = sanitizeRecord(s.records[i], 'recovered-' + i);
                   if (ids.has(r.id)) continue;
@@ -115,7 +115,7 @@
                   records.push(r); totalRecord(r);
                 }
               }
-              // Lifetime totals are independent of the 100-record display cap.
+              // Lifetime totals are independent of the retained-record limit.
               for (const key of Object.keys(totals)) totals[key] = Math.max(totals[key], key === 'seconds' ? number(previous[key]) : count(previous[key]));
               totals.headshots = Math.min(totals.kills, totals.headshots);
               for (const key of Object.keys(lifetime)) lifetime[key] = Math.max(lifetime[key], number(extra[key]));
