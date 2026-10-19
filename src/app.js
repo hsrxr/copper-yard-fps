@@ -184,7 +184,7 @@
       const result=mission.tick(dt,{position:player.position,interact:!!keys.KeyE,health:combat.hp,damaged:elapsed-lastHurtAt<.05});
       if(result.heal){FPSRules.healPlayer(combat,result.heal);audio.pickup();ui.toast('固定医疗点 · 恢复 35 生命','health');}
       if(result.advanced){wave=mission.snapshot().stage+1;audio.pickup();ui.toast(mission.snapshot().title,'info');updateHUD(true);}
-      if(result.completed){syncCareer();career.finish('extracted');releaseInput();screen='extracted';ui.setScreen(screen);if(document.pointerLockElement)document.exitPointerLock();audio.upgrade();updateHUD(true);}
+      if(result.completed){syncCareer();releaseInput();screen='extracted';ui.setScreen(screen);career.finish('extracted');if(document.pointerLockElement)document.exitPointerLock();audio.upgrade();updateHUD(true);}
     }
   }
   function makeTarget(){const r=new THREE.WebGLRenderTarget(1,1,{type:ctx.hdrType,minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,depthBuffer:true});r.depthTexture=new THREE.DepthTexture(1,1,THREE.UnsignedIntType);return r;}

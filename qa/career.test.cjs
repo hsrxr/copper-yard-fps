@@ -20,6 +20,59 @@ function fixture(options = {}) {
 }
 function achieved(c, id) { return c.snapshot().achievements.find(a => a.id === id); }
 
+test('difficulty completion requires successful extraction and unlocks only the matching difficulty once', () => {
+  for (const difficulty of ['standard', 'hard']) {
+    const { career: c, disk, unlocks } = fixture();
+    const id = 'complete_' + difficulty, other = difficulty === 'hard' ? 'complete_standard' : 'complete_hard';
+    for (const outcome of ['death', 'restart', 'abandoned']) {
+      c.begin({ difficulty }); c.sync({ wave: 3, elapsed: 10 }); c.finish(outcome);
+      assert.equal(achieved(c, id)?.unlocked, false);
+    }
+    c.begin({ difficulty }); c.sync({ wave: 3 });
+    assert.equal(achieved(c, id).unlocked, false);
+    c.finish('extracted'); c.finish('extracted');
+    assert.equal(achieved(c, id).unlocked, true); assert.equal(achieved(c, id).current, 1);
+    assert.equal(achieved(c, other).unlocked, false);
+    c.begin({ difficulty }); c.sync({ wave: 3 }); c.finish('extracted');
+    assert.equal(unlocks.filter(a => a.id === id).length, 1);
+    const restored = fixture({ storage: disk });
+    assert.equal(achieved(restored.career, id).unlocked, true);
+    assert.equal(achieved(restored.career, other).unlocked, false);
+    assert.equal(restored.unlocks.length, 0);
+    assert.equal(JSON.parse(restored.career.exportJSON()).achievements.find(a => a.id === id).current, 1);
+  }
+});
+
+test('legacy saves backfill difficulty completion only from successful finished runs', () => {
+  const disk = storage(JSON.stringify({ version: 1, totals: { runs: 3, bestWave: 3 },
+    records: [
+      { id: 'hard-death', difficulty: 'hard', outcome: 'death', wave: 3 },
+      { id: 'standard-win', difficulty: 'standard', outcome: 'extracted', wave: 3 },
+      { id: 'hard-abandoned', difficulty: 'hard', outcome: 'abandoned', wave: 3 }
+    ], active: { id: 'hard-active', difficulty: 'hard', outcome: 'active', wave: 3 }
+  }));
+  const { career: c, unlocks } = fixture({ storage: disk });
+  assert.equal(achieved(c, 'complete_standard')?.unlocked, true);
+  assert.equal(achieved(c, 'complete_hard')?.unlocked, false);
+  assert.equal(unlocks.length, 0); assert.equal(c.snapshot().records[0].outcome, 'abandoned');
+  c.checkpoint();
+  const restored = fixture({ storage: disk }).career;
+  assert.equal(achieved(restored, 'complete_standard').unlocked, true);
+  assert.equal(achieved(restored, 'complete_hard').current, 0);
+});
+
+test('difficulty completion survives its winning record falling outside the retained history', () => {
+  const { career: c, disk, advance } = fixture();
+  c.begin({ difficulty: 'hard' }); c.sync({ wave: 3 }); c.finish('extracted');
+  for (let i = 0; i < 500; i++) { advance(1000); c.begin(); c.finish('death'); }
+  const restored = fixture({ storage: disk }).career;
+  assert.equal(restored.snapshot().records.length, 500);
+  assert.ok(restored.snapshot().records.every(r => r.outcome === 'death'));
+  assert.equal(achieved(restored, 'complete_hard')?.unlocked, true);
+  assert.equal(achieved(restored, 'complete_hard').current, 1);
+  assert.equal(achieved(restored, 'complete_standard').unlocked, false);
+});
+
 test('death records finalized totals once and remains unchanged by later events', () => {
   const { career: c, advance } = fixture();
   c.begin({ spawn: { x: 12, y: 8, z: -4 }, quality: 'low' });

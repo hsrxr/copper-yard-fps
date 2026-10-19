@@ -14,6 +14,8 @@
     ['first_knife', '近身交锋', '使用刀击杀 1 名敌人', 1, 'knifeKills'],
     ['heavy_5', '破甲先锋', '累计击杀 5 名重装兵', 5, 'heavyKills'],
     ['mission_complete', '安全撤离', '单局完成全部 3 个任务目标', 3, 'wave'],
+    ['complete_standard', '标准模式通关', '在标准难度下成功撤离 1 次', 1, 'standardWins'],
+    ['complete_hard', '困难模式通关', '在困难难度下成功撤离 1 次', 1, 'hardWins'],
     ['survivor_300', '持久战士', '单局存活 300 秒', 300, 'duration']
   ];
   function object(v) { return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
@@ -49,7 +51,7 @@
     const now = typeof options.now === 'function' ? options.now : Date.now;
     const onUnlock = typeof options.onUnlock === 'function' ? options.onUnlock : null;
     const totals = { runs: 0, kills: 0, headshots: 0, bestScore: 0, bestWave: 0, seconds: 0 };
-    const lifetime = { knifeKills: 0, heavyKills: 0, bestLevel: 1, bestDuration: 0 };
+    const lifetime = { knifeKills: 0, heavyKills: 0, bestLevel: 1, bestDuration: 0, standardWins: 0, hardWins: 0 };
     const unlocked = Object.create(null), storageState = { available: true, message: '记录保存在当前浏览器' };
     let disk = null, active = null, records = [], sequence = 0, checkpointAt = 0, frameTotalMs = 0;
     function timestamp() { let t; try { t = now(); } catch (_) { t = Date.now(); } return count(t); }
@@ -58,6 +60,7 @@
       const live = active || {};
       if (key === 'kills' || key === 'headshots') return add(totals[key], live[key] || 0);
       if (key === 'knifeKills' || key === 'heavyKills') return add(lifetime[key], live[key] || 0);
+      if (key === 'standardWins' || key === 'hardWins') return lifetime[key];
       if (key === 'wave') return Math.max(totals.bestWave, live.wave || 0);
       if (key === 'level') return Math.max(lifetime.bestLevel, live.level || 1);
       return Math.max(lifetime.bestDuration, live.duration || 0);
@@ -81,12 +84,17 @@
       totals.bestScore = Math.max(totals.bestScore, r.score); totals.bestWave = Math.max(totals.bestWave, r.wave);
       lifetime.knifeKills = add(lifetime.knifeKills, r.knifeKills); lifetime.heavyKills = add(lifetime.heavyKills, r.heavyKills);
       lifetime.bestLevel = Math.max(lifetime.bestLevel, r.level); lifetime.bestDuration = Math.max(lifetime.bestDuration, r.duration);
+      if (r.outcome === 'extracted') {
+        const key = r.difficulty === 'hard' ? 'hardWins' : 'standardWins';
+        lifetime[key] = add(lifetime[key], 1);
+      }
     }
     function finalize(outcome, endedAt, notify) {
       if (!active) return null;
-      evaluate(notify); active.outcome = outcome; active.endedAt = Math.max(active.startedAt, endedAt);
+      active.outcome = outcome; active.endedAt = Math.max(active.startedAt, endedAt);
       const finished = active; active = null; totalRecord(finished);
       records.unshift(finished); if (records.length > RECORD_LIMIT) records.length = RECORD_LIMIT;
+      evaluate(notify);
       frameTotalMs = 0; return finished;
     }
     // Read once. Malformed/newer data is preserved intact and explicitly placed
