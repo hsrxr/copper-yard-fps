@@ -1,0 +1,14 @@
+node_modules/
+qa/artifacts/
+__pycache__/
+*.pyc
+*.log
+.env
+.env.*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+snapshots/
+playwright-report/
+test-results/

@@ -1,0 +1,18 @@
+{
+  "name": "copper-yard-fps",
+  "version": "1.0.0",
+  "private": true,
+  "description": "铜港货场 · Copper Yard — 离线网页版短局战术 FPS",
+  "scripts": {
+    "build": "python build.py",
+    "serve": "python -m http.server 8080 --bind 127.0.0.1",
+    "test": "node --test qa/*.test.cjs",
+    "test:browser": "node qa/tactical-mission.verify.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}
