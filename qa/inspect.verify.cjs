@@ -15,7 +15,7 @@ async function waitGame(seconds){const s=await state();await page.waitForFunctio
 async function playing(){await page.waitForFunction(()=>CopperYardFPS.getState().screen==='playing'&&document.pointerLockElement?.id==='scene');}
 async function inspect(){await page.keyboard.press('KeyY');const s=await state();assert.ok(s.viewModel.inspection?.active,'Y starts inspection');return s;}
 async function idle(){await page.waitForFunction(()=>!CopperYardFPS.getState().viewModel.inspection?.active);await waitGame(.15);}
-async function equip(key,slot){await page.keyboard.press(key);await waitGame(.55);assert.equal((await state()).viewModel.activeSlot,slot);}
+async function equip(key,slot){await page.keyboard.press(key);await waitGame(.55);await page.waitForFunction(()=>!CopperYardFPS.getState().viewModel.draw.active&&!CopperYardFPS.getState().viewModel.draw.pending);assert.equal((await state()).viewModel.activeSlot,slot);}
 async function snapshot(name){const file='inspect-'+tag+'-'+name+'.png';await page.screenshot({path:path.join(out,file)});report.screenshots.push(file);}
 function near(a,b,epsilon=1e-7){assert.equal(a.length,b.length);a.forEach((v,i)=>assert.ok(Math.abs(v-b[i])<=epsilon,`${i}: ${v} differs from ${b[i]}`));}
 function stableFacts(s){return {position:s.player.position,yaw:s.player.yaw,pitch:s.player.pitch,ammo:s.combat.ammo,reserve:s.combat.reserve,fireCooldown:s.combat.fireCooldown,switchCooldown:s.combat.switchCooldown,spread:s.accuracy.spread};}
@@ -35,7 +35,7 @@ async function main(){
  await page.locator('#qualitySelect').selectOption('low');await page.locator('#menuAdaptiveEffects').uncheck();await page.locator('#startButton').click();await playing();
  await page.evaluate(()=>{CopperYardFPS.debug.setEnemyFire(false);CopperYardFPS.debug.setPlayer({x:6,z:84,yaw:0,pitch:0});});await waitGame(.6);
  for(const [key,slot]of [['Digit1','primary'],['Digit2','secondary'],['Digit3','knife']])await check(slot+' inspection animates then returns to ready without gameplay changes',async()=>{
-  await equip(key,slot);const before=await state(),started=await inspect();assert.equal(started.viewModel.inspection.slot,slot);assert.ok(started.viewModel.inspection.duration>=1.5&&started.viewModel.inspection.duration<=3.5);
+  await equip(key,slot);const before=await state(),started=await inspect();assert.equal(started.viewModel.inspection.slot,slot);assert.equal(started.viewModel.inspection.duration,slot==='knife'?(meleeStyle==='butterfly'?3.65:1.95):slot==='primary'?2.35:2.1);
   await waitGame(.85);const middle=await state();assert.ok(middle.viewModel.inspection.active);assert.notDeepEqual(middle.viewModel.pose,before.viewModel.pose,'gesture moves the viewmodel');assert.deepEqual(stableFacts(middle),stableFacts(before),'inspection is cosmetic');await snapshot(slot+'inspect');
   await idle();const after=await state();near(after.viewModel.pose.position,before.viewModel.pose.position);near(after.viewModel.pose.rotation,before.viewModel.pose.rotation);assert.deepEqual(stableFacts(after),stableFacts(before));await snapshot(slot+'ready');return {duration:started.viewModel.inspection.duration,before:before.viewModel.pose,middle:middle.viewModel.pose,after:after.viewModel.pose};
  });

@@ -10,7 +10,7 @@ function fixture(){
  const canvas={addEventListener(){},focus(){},requestPointerLock(){}};
  document.pointerLockElement=canvas;
  const ctx={console,Math,Number,screen:'playing',locked:true,controlRequest:null,tactical:true,lost:false,failed:false,ready:true,keys:{},ads:false,firing:false,attackQueued:null,footstepDistance:0,
-  ui:{isCareerOpen:()=>false,toast(){},setScreen(){}},document,canvas,
+  ui:{isCareerOpen:()=>false,toast(){},setScreen(){}},document,canvas,viewModel:{equip(slot){ctx.lastViewSlot=slot;}},
   window:{addEventListener:(type,fn)=>(winEvents[type]??=[]).push(fn)},performance:{now:()=>0},
   clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),mission:{tick(){}},enemies:{interruptAttacks(){}},renderer:{shadowMap:{}},
   audio:{jump(){},reload(){}},startCount:0,reloadCount:0,cancelMelee(){},cancelInspect(){},saveCareerNow(){},updateHUD(){},requestControl(){},resizePending:false,last:0,

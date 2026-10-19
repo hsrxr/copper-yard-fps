@@ -12,7 +12,8 @@
     "test:audio": "node qa/selected-audio.verify.cjs",
     "test:inspect": "node qa/inspect.verify.cjs",
     "test:backstab": "node qa/backstab.verify.cjs",
-    "test:melee-selection": "node qa/melee-selection.verify.cjs"
+    "test:melee-selection": "node qa/melee-selection.verify.cjs",
+    "test:butterfly-draw": "node qa/butterfly-draw.verify.cjs"
   },
   "engines": {
     "node": ">=20"

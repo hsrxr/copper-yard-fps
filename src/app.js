@@ -124,7 +124,7 @@
     return viewModel.inspect(combat.activeSlot);
   }
   function reload(){if(screen!=='playing')return false;cancelInspect();if(FPSRules.startReload(combat)){combat.reloadDuration=combat.reloadLeft;audio.reload();return true;}return false;}
-  function equip(slot){if(screen!=='playing')return false;cancelInspect();if(!FPSRules.switchWeapon(combat,slot))return false;firing=ads=false;attackQueued=null;cancelMelee();player.recoil=0;updateHUD(true);return true;}
+  function equip(slot){if(screen!=='playing')return false;cancelInspect();if(!FPSRules.switchWeapon(combat,slot))return false;viewModel.equip(combat.activeSlot);firing=ads=false;attackQueued=null;cancelMelee();player.recoil=0;updateHUD(true);return true;}
   function applyPlayerHit(hit,weapon,attackMeta){
     if(!hit)return null;
     const scoreBefore=combat.score,result=enemies.damage(hit.id,hit.zone,weapon.damage*FPSRules.zoneMultiplier(hit.zone,weapon),Object.assign({origin:{x:camera.position.x,y:camera.position.y,z:camera.position.z},direction:{x:shotDir.x,y:shotDir.y,z:shotDir.z}},attackMeta));

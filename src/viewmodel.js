@@ -137,7 +137,7 @@
     // A separate balisong keeps the original knife intact. The safe handle is
     // held at a fixed hinge; the blade carrier and free handle rotate about
     // their real pins, so folding never stretches or detaches the assembly.
-    const butterfly=new THREE.Group();butterfly.name='butterfly-weapon';butterfly.visible=false;butterfly.rotation.z=.32;rig.add(butterfly);
+    const butterfly=new THREE.Group();butterfly.name='butterfly-weapon';butterfly.visible=false;butterfly.rotation.set(-.12,-.25,.88);butterfly.position.y=.045;rig.add(butterfly);
     const handleShape=new THREE.Shape();handleShape.moveTo(-.022,.014);handleShape.lineTo(.022,.014);handleShape.lineTo(.021,-.246);handleShape.quadraticCurveTo(.020,-.271,0,-.278);handleShape.quadraticCurveTo(-.020,-.271,-.021,-.246);handleShape.closePath();
     for(let i=0;i<4;i++){const y=-.048-i*.046,hole=new THREE.Path();hole.moveTo(-.009,y);hole.lineTo(-.009,y-.026);hole.lineTo(.009,y-.026);hole.lineTo(.009,y);hole.closePath();handleShape.holes.push(hole);}
     const handleGeometry=new THREE.ExtrudeGeometry(handleShape,{depth:.005,steps:1,bevelEnabled:true,bevelSegments:1,bevelSize:.0015,bevelThickness:.001});
@@ -153,8 +153,12 @@
       cylinder(handle,materials.edge,0,-.247,.024,.005,.004);
       return handle;
     }
-    const safeHandle=butterflyHandle(butterfly,'butterfly-safe-handle');safeHandle.position.set(-.027,.065,-.105);
-    const bladeCarrier=new THREE.Group();bladeCarrier.name='butterfly-blade-carrier';bladeCarrier.position.copy(safeHandle.position);butterfly.add(bladeCarrier);
+    // The index finger is a second pivot: the closed assembly can roll around
+    // the grip without spinning the entire arm or breaking the two hinge pins.
+    const butterflyRoll=new THREE.Group();butterflyRoll.name='butterfly-roll';butterflyRoll.position.set(-.027,-.048,-.105);butterfly.add(butterflyRoll);
+    const butterflyAssembly=new THREE.Group();butterflyAssembly.position.copy(butterflyRoll.position).multiplyScalar(-1);butterflyRoll.add(butterflyAssembly);
+    const safeHandle=butterflyHandle(butterflyAssembly,'butterfly-safe-handle');safeHandle.position.set(-.027,.065,-.105);
+    const bladeCarrier=new THREE.Group();bladeCarrier.name='butterfly-blade-carrier';bladeCarrier.position.copy(safeHandle.position);butterflyAssembly.add(bladeCarrier);
     const butterflyBladeShape=new THREE.Shape();butterflyBladeShape.moveTo(.006,-.014);butterflyBladeShape.lineTo(.047,-.014);butterflyBladeShape.lineTo(.049,.170);butterflyBladeShape.lineTo(.025,.258);butterflyBladeShape.lineTo(.005,.185);butterflyBladeShape.closePath();
     const butterflyBladeGeometry=new THREE.ExtrudeGeometry(butterflyBladeShape,{depth:.010,steps:1,bevelEnabled:true,bevelSegments:1,bevelSize:.002,bevelThickness:.0015});
     const butterflyBlade=new THREE.Mesh(butterflyBladeGeometry,materials.blade);butterflyBlade.position.z=-.005;bladeCarrier.add(butterflyBlade);
@@ -169,13 +173,19 @@
     box(freeHandle,materials.copper,0,-.282,0,.012,.028,.014);
     box(freeHandle,materials.edge,-.010,-.296,0,.031,.008,.014);
     const butterflyGrip=new THREE.Group();butterflyGrip.name='butterfly-grip';butterfly.add(butterflyGrip);
-    box(butterflyGrip,materials.glove,-.008,-.075,-.054,.078,.112,.078,.03,0,-.10);
-    box(butterflyGrip,materials.grip,.026,-.068,-.082,.028,.086,.043,.02,0,-.08);
-    box(butterflyGrip,materials.glove,-.040,-.020,-.087,.025,.067,.053,.04,0,.25);
-    box(butterflyGrip,materials.rubber,-.005,-.137,-.041,.079,.027,.077);
-    box(butterflyGrip,materials.sleeve,.020,-.222,.027,.108,.18,.126,-.48,0,-.16);
+    const gloveShape=new THREE.Shape();gloveShape.moveTo(-.38,-.38);gloveShape.lineTo(.38,-.38);gloveShape.lineTo(.38,.38);gloveShape.lineTo(-.38,.38);gloveShape.closePath();
+    const gloveGeometry=new THREE.ExtrudeGeometry(gloveShape,{depth:.76,steps:1,bevelEnabled:true,bevelSegments:1,bevelSize:.12,bevelThickness:.12});gloveGeometry.translate(0,0,-.38);
+    function gloveBox(parent,material,...pose){const mesh=box(parent,material,...pose);mesh.geometry=gloveGeometry;return mesh;}
+    gloveBox(butterflyGrip,materials.glove,-.008,-.075,-.054,.078,.112,.078,.03,0,-.10);
+    gloveBox(butterflyGrip,materials.grip,.026,-.068,-.082,.028,.086,.043,.02,0,-.08);
+    gloveBox(butterflyGrip,materials.grip,-.008,-.072,-.012,.058,.070,.008,.03,0,-.10);
+    const butterflyThumb=new THREE.Group();butterflyThumb.name='butterfly-thumb';butterflyThumb.position.set(-.040,-.020,-.087);butterflyGrip.add(butterflyThumb);
+    gloveBox(butterflyThumb,materials.glove,0,0,0,.025,.067,.053,.04,0,.25);
+    gloveBox(butterflyGrip,materials.rubber,-.005,-.137,-.041,.079,.027,.077);
+    // Extend the sleeve beyond the frame throughout the raised gesture.
+    gloveBox(butterflyGrip,materials.sleeve,.050,-.365,.085,.105,.50,.122,-.36,0,-.16);
     const butterflyFingers=[];
-    for(let i=0;i<3;i++){const finger=new THREE.Group();finger.position.set(.015,-.047-i*.029,-.060);butterflyGrip.add(finger);box(finger,materials.glove,.025,0,-.021,.053,.024,.028,0,.12,0);box(finger,materials.grip,.046,0,-.041,.024,.023,.036,0,-.15,0);butterflyFingers.push(finger);}
+    for(let i=0;i<3;i++){const finger=new THREE.Group();finger.name='butterfly-finger-'+i;finger.position.set(.015,-.047-i*.029,-.060);butterflyGrip.add(finger);gloveBox(finger,materials.glove,.025,0,-.021,.053,.024,.028,0,.12,0);gloveBox(finger,materials.grip,.046,0,-.041,.024,.023,.036,0,-.15,0);butterflyFingers.push(finger);}
     const muzzle=new THREE.Group();muzzle.position.set(0,.01,-1.0);gun.add(muzzle);
     const flash=new THREE.Mesh(new THREE.ConeGeometry(.036,.13,5),materials.flash);flash.rotation.x=-Math.PI/2;muzzle.add(flash);
     const flashCore=new THREE.Mesh(new THREE.ConeGeometry(.019,.09,5),materials.flashCore);flashCore.rotation.x=-Math.PI/2;flashCore.position.z=.009;muzzle.add(flashCore);muzzle.visible=false;
@@ -246,31 +256,63 @@
         [1.5,-.14,.025,-.10,-.16,.65,.28],
         [1.95,0,0,0,0,0,0]
       ]),
-      butterfly:makePoseMotion(2.8,0,0,[
+      butterfly:makePoseMotion(3.65,0,0,[
         [0,0,0,0,0,0,0],
-        [.30,-.15,.13,-.12,.12,-.28,-.50],
-        [.66,-.18,.16,-.14,.06,-.42,-.84],
-        [1.02,-.18,.17,-.14,.14,-.30,-.30],
-        [1.34,-.17,.16,-.14,.12,.16,.28],
-        [1.74,-.15,.13,-.12,-.10,.46,-.40],
-        [2.10,-.15,.11,-.10,-.12,.58,-.48],
-        [2.35,-.15,.11,-.10,-.12,.58,-.48],
-        [2.8,0,0,0,0,0,0]
+        [.18,.025,-.025,.015,-.10,.12,.18],
+        [.42,-.12,.14,-.12,.24,-.42,-.60],
+        [.72,-.16,.19,-.15,.10,-.70,-.86],
+        [.98,-.19,.15,-.14,-.28,.22,-.24],
+        [1.22,-.13,.20,-.16,.20,.55,.22],
+        [1.46,-.12,.14,-.13,.10,.22,-.48],
+        [1.78,-.16,.12,-.09,-.12,-.35,-1.14],
+        [2.14,-.16,.12,-.09,-.12,-.35,-1.14],
+        [2.55,-.17,.13,-.10,.08,.52,-1.02],
+        [2.76,-.13,.08,-.12,.16,.50,-.32],
+        [3.02,-.07,.17,-.13,-.22,-.30,-.64],
+        [3.26,-.04,.07,-.065,.08,-.14,.12],
+        [3.40,-.02,.025,-.02,-.035,.04,-.04],
+        [3.65,0,0,0,0,0,0]
       ])
     };
-    // Joint angles are relative to their pins. A controlled close, a held
-    // folded silhouette, then an opening fan give the two handles real work.
-    // The last three channels are unused; reuse the allocation-free sampler.
-    const butterflyMotion=makePoseMotion(2.8,0,0,[
+    // Timing study: fast finger rollover, a readable open-V presentation,
+    // then a wrist-led re-catch. Six channels are blade hinge, free hinge,
+    // finger release, index rollover, assembly yaw and finger splay.
+    // The unwrapped full turn keeps spinning in one direction. Its terminal
+    // -2PI is physically identical to the zero-angle ready pose.
+    const turn=Math.PI*2;
+    const butterflyMotion=makePoseMotion(3.65,0,0,[
       [0,0,0,0,0,0,0],
-      [.24,-.20,.65,.65,0,0,0],
-      [.58,-1.85,2.30,1,0,0,0],
-      [.86,-Math.PI,Math.PI,1,0,0,0],
-      [1.12,-Math.PI,Math.PI,1,0,0,0],
-      [1.42,-2.10,1.25,1,0,0,0],
-      [1.72,-.55,-.65,.85,0,0,0],
-      [2.05,0,0,0,0,0,0],
-      [2.8,0,0,0,0,0,0]
+      [.20,-.35,.50,.7,.15,-.12,.10],
+      [.48,-2.10,2.65,1,-.55,.12,.22],
+      [.70,-Math.PI,Math.PI,1,-1.40,.30,.30],
+      [.92,-2.20,1.40,1,-3.10,-.25,.35],
+      [1.16,-.50,-1.80,.8,-4.80,-.18,.25],
+      [1.40,0,0,.15,-turn,0,.02],
+      [1.68,-.05,.55,.55,-turn,0,.08],
+      [2.40,-.05,.55,.55,-turn,0,.08],
+      [2.62,-.10,.65,.50,-turn,0,.08],
+      [2.91,-1.80,2.40,1,-5.70,.20,.25],
+      [3.15,-.65,1.10,.75,-6.40,-.10,.14],
+      [3.38,0,0,0,-turn,0,0],
+      [3.65,0,0,0,-turn,0,0]
+    ]);
+    // A separate closed-to-open draw: rise, wrist flick, trailing free handle,
+    // catch and small settling recoil. It never changes combat switch timers.
+    const drawMotion=makePoseMotion(.85,0,0,[
+      [0,.065,.02,.025,-.35,.35,-.90],
+      [.16,-.045,.055,-.07,-.14,-.18,-.70],
+      [.35,-.075,.17,-.12,.24,-.42,-.35],
+      [.55,-.035,.10,-.075,-.10,.15,.15],
+      [.67,-.01,.02,-.02,.055,-.04,-.055],
+      [.85,0,0,0,0,0,0]
+    ]);
+    const drawJoints=makePoseMotion(.85,0,0,[
+      [0,-Math.PI,Math.PI,.65,-.55,0,.08],
+      [.16,-2.70,2.95,1,-.90,.18,.2],
+      [.38,-1.20,1.40,.9,.45,-.18,.18],
+      [.60,0,0,.12,0,0,0],
+      [.68,.055,-.10,0,0,0,0],
+      [.85,0,0,0,0,0,0]
     ]);
     function sampleMotion(motion,elapsed,offset){
       let index=0;while(index<motion.keys.length-2&&elapsed>motion.keys[index+1][0])index++;
@@ -280,20 +322,40 @@
     }
     const inspectOffset=new Float64Array(6);
     const butterflyOffset=new Float64Array(6);
+    const drawOffset=new Float64Array(6);
     let meleeStyle='classic';
     let inspectActive=false,inspectElapsed=0,inspectSlot='primary',inspectBlocked=false;
+    let drawActive=false,drawPending=false,drawElapsed=0,drawJustStarted=false;
     function inspectionMotion(){return inspectMotions[inspectSlot==='knife'&&meleeStyle==='butterfly'?'butterfly':inspectSlot];}
-    function resetButterfly(){bladeCarrier.rotation.z=0;freeHandle.rotation.z=0;for(const finger of butterflyFingers)finger.rotation.y=0;}
-    function cancelInspect(){inspectActive=false;inspectElapsed=0;inspectOffset.fill(0);resetButterfly();}
+    function resetButterfly(){bladeCarrier.rotation.z=0;freeHandle.rotation.z=0;butterflyRoll.rotation.set(0,0,0);butterflyGrip.rotation.set(0,0,0);butterflyThumb.rotation.set(0,0,0);for(const finger of butterflyFingers)finger.rotation.set(0,0,0);}
+    function cancelInspectionOnly(){inspectActive=false;inspectElapsed=0;inspectOffset.fill(0);}
+    function cancelDraw(){drawActive=false;drawPending=false;drawElapsed=0;drawJustStarted=false;drawOffset.fill(0);}
+    // Input/lifecycle interruptions clear both cosmetic gestures, including a
+    // draw queued while the outgoing weapon is still being lowered.
+    function cancelInspect(){cancelInspectionOnly();cancelDraw();resetButterfly();}
+    function applyButterfly(motion,elapsed){
+      sampleMotion(motion,elapsed,butterflyOffset);
+      bladeCarrier.rotation.z=butterflyOffset[0];freeHandle.rotation.z=butterflyOffset[1];
+      butterflyRoll.rotation.z=butterflyOffset[3];butterflyRoll.rotation.y=butterflyOffset[4];
+      butterflyThumb.rotation.z=-butterflyOffset[2]*.4;
+      for(let i=0;i<butterflyFingers.length;i++){
+        butterflyFingers[i].rotation.y=-butterflyOffset[2]*(i===0?.28:.85+i*.12);
+        butterflyFingers[i].rotation.z=butterflyOffset[5]*(i===0?.25:1);
+      }
+    }
+    function updateDraw(dt){
+      drawOffset.fill(0);if(!drawActive)return;
+      if(drawJustStarted)drawJustStarted=false;else drawElapsed=Math.min(drawMotion.duration,drawElapsed+dt);
+      if(drawElapsed>=drawMotion.duration){drawActive=false;return;}
+      sampleMotion(drawMotion,drawElapsed,drawOffset);applyButterfly(drawJoints,drawElapsed);
+    }
     function updateInspection(dt){
-      inspectOffset.fill(0);resetButterfly();if(!inspectActive)return;
+      inspectOffset.fill(0);if(!inspectActive)return;
       const motion=inspectionMotion();inspectElapsed=Math.min(motion.duration,inspectElapsed+dt);
       if(inspectElapsed>=motion.duration){inspectActive=false;return;}
       sampleMotion(motion,inspectElapsed,inspectOffset);
       if(inspectSlot==='knife'&&meleeStyle==='butterfly'){
-        sampleMotion(butterflyMotion,inspectElapsed,butterflyOffset);
-        bladeCarrier.rotation.z=butterflyOffset[0];freeHandle.rotation.z=butterflyOffset[1];
-        for(let i=0;i<butterflyFingers.length;i++)butterflyFingers[i].rotation.y=-butterflyOffset[2]*(.75+i*.12);
+        applyButterfly(butterflyMotion,inspectElapsed);
       }
     }
     const knifeOffset=new Float64Array(6);
@@ -312,12 +374,18 @@
     let activeSlot='primary',desiredSlot='primary';
     function slotOf(value,fallback='primary'){return value==='knife'||value==='melee'?'knife':value==='secondary'||value==='pistol'?'secondary':value==='primary'||value==='rifle'?'primary':fallback;}
     function updateWeaponVisibility(){gun.visible=activeSlot==='primary';pistol.visible=activeSlot==='secondary';knife.visible=activeSlot==='knife'&&meleeStyle==='classic';butterfly.visible=activeSlot==='knife'&&meleeStyle==='butterfly';}
-    function selectSlot(slot){
+    function requestSlot(slot){
+      slot=slotOf(slot,desiredSlot);if(slot===desiredSlot)return false;
+      desiredSlot=slot;flashTime=0;cancelMelee();cancelInspect();
+      drawPending=slot==='knife'&&meleeStyle==='butterfly';return true;
+    }
+    function selectSlot(slot,animateDraw=false){
       activeSlot=slot;updateWeaponVisibility();
       adsBlend=0;kick=0;kickVelocity=0;roll=0;flashTime=0;cancelMelee();cancelInspect();muzzle.visible=false;flashLight.intensity=0;
       const owner=slot==='secondary'?pistol:gun;owner.add(muzzle);owner.add(flashLight);
       muzzle.position.set(0,slot==='secondary'?.027:.01,slot==='secondary'?-.462:-1);
       flashLight.position.set(0,.03,slot==='secondary'?-.37:-.85);
+      if(animateDraw&&slot==='knife'&&meleeStyle==='butterfly'){drawActive=true;drawJustStarted=true;}
     }
     function update(dt,state={}){
       dt=Math.max(0,Math.min(.05,Number(dt)||0));time+=dt;
@@ -326,9 +394,9 @@
       // Paused/dead views keep the pose, but transient muzzle light must not freeze.
       if(dt===0)flashTime=0;
       const requested=slotOf(state.activeSlot||state.weaponKind,desiredSlot);
-      if(requested!==desiredSlot){desiredSlot=requested;flashTime=0;cancelMelee();cancelInspect();}
-      if(desiredSlot!==activeSlot){switchAmount=Math.min(1,switchAmount+dt/ .10);if(switchAmount>=1)selectSlot(desiredSlot);}
-      else switchAmount=Math.max(0,switchAmount-dt/ .16);
+      if(requested!==desiredSlot)requestSlot(requested);
+      if(desiredSlot!==activeSlot){switchAmount=Math.min(1,switchAmount+dt/ .10);if(switchAmount>=1)selectSlot(desiredSlot,drawPending);}
+      else{if(drawPending)selectSlot(desiredSlot,true);switchAmount=Math.max(0,switchAmount-dt/ .16);}
       const melee=activeSlot==='knife',sidearm=activeSlot==='secondary';
       const movement=Math.min(1,Math.max(0,Number(state.moving)||0));
       const hasReadiness=Number.isFinite(state.adsBlend),targetAds=melee?0:hasReadiness?state.adsBlend:Number(state.ads)||0,targetMotion=movement>.001?movement:0,targetSprint=state.sprinting&&targetMotion>0?1:0;
@@ -346,7 +414,7 @@
       kickVelocity+=(-kick*175-kickVelocity*21)*dt;kick+=kickVelocity*dt;kick=Math.max(-.016,Math.min(.14,kick));roll*=Math.exp(-dt*13);
       const rawReload=melee?0:Number(state.reloadProgress)||0,reloading=rawReload>0&&rawReload<1;
       inspectBlocked=!!state.ads||adsBlend>.001||reloading||switchAmount>0||desiredSlot!==activeSlot||meleeActive;
-      if(inspectBlocked)cancelInspect();
+      if(inspectBlocked)cancelInspectionOnly();
       const reload=reloading?Math.sin(Math.PI*rawReload):0;
       const bobStrength=motionBlend*(1-adsBlend*.85),bobTime=time*(8+sprintBlend*4);
       const bobX=Math.sin(bobTime)*.006*bobStrength,bobY=Math.abs(Math.cos(bobTime))*.006*bobStrength;
@@ -363,19 +431,20 @@
       pistolLeft.position.y=-.122-magDrop*.12;pistolLeft.position.z=-.045+reload*.095;
       updateKnifeMotion(dt);
       if(melee){rig.position.x+=knifeOffset[0];rig.position.y+=knifeOffset[1];rig.position.z+=knifeOffset[2];rig.rotation.x+=knifeOffset[3];rig.rotation.y+=knifeOffset[4];rig.rotation.z+=knifeOffset[5];}
-      updateInspection(dt);
-      rig.position.x+=inspectOffset[0];rig.position.y+=inspectOffset[1];rig.position.z+=inspectOffset[2];
-      rig.rotation.x+=inspectOffset[3];rig.rotation.y+=inspectOffset[4];rig.rotation.z+=inspectOffset[5];
+      resetButterfly();updateDraw(dt);updateInspection(dt);
+      rig.position.x+=inspectOffset[0]+drawOffset[0];rig.position.y+=inspectOffset[1]+drawOffset[1];rig.position.z+=inspectOffset[2]+drawOffset[2];
+      rig.rotation.x+=inspectOffset[3]+drawOffset[3];rig.rotation.y+=inspectOffset[4]+drawOffset[4];rig.rotation.z+=inspectOffset[5]+drawOffset[5];
       rig.position.y-=switchAmount*.36;rig.rotation.x-=switchAmount*.35;
       flashTime=melee?0:Math.max(0,flashTime-dt);muzzle.visible=flashTime>0;flashLight.intensity=flashTime>0?(sidearm?1.65:2.1):0;
       if(muzzle.visible){muzzle.rotation.z=time*71;muzzle.scale.setScalar(.8+Math.random()*.35);materials.flash.opacity=Math.min(1,flashTime*45);}
     }
     return{
       update,
+      equip:requestSlot,
       inspect(slot=activeSlot){
         if(inspectActive){cancelInspect();return true;}
         if(inspectBlocked||meleeActive||switchAmount>0||slotOf(slot)!==activeSlot||desiredSlot!==activeSlot)return false;
-        inspectSlot=activeSlot;inspectElapsed=0;inspectActive=true;return true;
+        cancelDraw();resetButterfly();inspectSlot=activeSlot;inspectElapsed=0;inspectActive=true;return true;
       },
       cancelInspect,
       shoot(slot,mode='light'){
@@ -394,7 +463,7 @@
       resize(width,height){camera.aspect=Math.max(1,width)/Math.max(1,height);camera.updateProjectionMatrix();},
       cancelMelee,
       // Snapshot only: diagnostics can inspect timing without mutating the rig.
-      getState(){const motion=knifeMotions[meleeMode];return{activeSlot,meleeStyle,adsBlend,inspection:{active:inspectActive,elapsed:inspectElapsed,duration:inspectionMotion().duration,slot:inspectSlot},melee:{active:meleeActive,mode:meleeMode,elapsed:meleeElapsed,duration:motion.duration,hitTime:motion.hitTime,phase:!meleeActive?'idle':meleeElapsed<motion.hitTime?'windup':meleeElapsed<motion.recoveryTime?'strike':'recover'},pose:{position:[rig.position.x,rig.position.y,rig.position.z],rotation:[rig.rotation.x,rig.rotation.y,rig.rotation.z]}};},
+      getState(){const motion=knifeMotions[meleeMode];return{activeSlot,meleeStyle,adsBlend,draw:{active:drawActive,pending:drawPending,elapsed:drawElapsed,duration:drawMotion.duration},inspection:{active:inspectActive,elapsed:inspectElapsed,duration:inspectionMotion().duration,slot:inspectSlot},melee:{active:meleeActive,mode:meleeMode,elapsed:meleeElapsed,duration:motion.duration,hitTime:motion.hitTime,phase:!meleeActive?'idle':meleeElapsed<motion.hitTime?'windup':meleeElapsed<motion.recoveryTime?'strike':'recover'},pose:{position:[rig.position.x,rig.position.y,rig.position.z],rotation:[rig.rotation.x,rig.rotation.y,rig.rotation.z]}};},
       reset(){time=0;adsBlend=0;motionBlend=0;sprintBlend=0;kick=0;kickVelocity=0;flashTime=0;roll=0;cancelMelee();cancelInspect();inspectSlot='primary';inspectBlocked=false;meleeMode='light';switchAmount=0;desiredSlot='primary';selectSlot('primary');update(0,{activeSlot:'primary'});}
     };
   };

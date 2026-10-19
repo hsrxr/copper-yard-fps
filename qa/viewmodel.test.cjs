@@ -170,7 +170,7 @@ test('movement preserves inspection and a second press cancels without restartin
 });
 
 function renderedScene(view){let scene;view.render({autoClear:true,clearDepth(){},render(value){scene=value;}});assert.ok(scene,'the real view model render exposes a scene');scene.updateMatrixWorld(true);return scene;}
-function butterflyFixture(){const view=context.createViewModel(context.THREE);view.reset();advanceState(view,.4,{activeSlot:'knife',meleeStyle:'butterfly'});return view;}
+function butterflyFixture(){const view=context.createViewModel(context.THREE);view.reset();advanceState(view,1.5,{activeSlot:'knife',meleeStyle:'butterfly'});return view;}
 function butterflyParts(view){const scene=renderedScene(view),parts={};for(const name of ['butterfly-weapon','butterfly-blade-carrier','butterfly-free-handle','butterfly-safe-handle','butterfly-grip']){parts[name]=scene.getObjectByName(name);assert.ok(parts[name],name+' exists in the rendered assembly');}return parts;}
 function jointAngles(view){const parts=butterflyParts(view);return [parts['butterfly-blade-carrier'].rotation.z,parts['butterfly-free-handle'].rotation.z];}
 
@@ -184,7 +184,7 @@ test('butterfly is an optional knife style while classic remains the default',()
   assert.equal(butterflyScene.getObjectByName('knife-weapon').visible,false);
   assert.equal(butterflyScene.getObjectByName('butterfly-weapon').visible,true);
   assert.equal(classic.inspect('knife'),true);assert.equal(classic.getState().inspection.duration,1.95);
-  assert.equal(butterfly.inspect('knife'),true);assert.equal(butterfly.getState().inspection.duration,2.8);
+  assert.equal(butterfly.inspect('knife'),true);assert.ok(butterfly.getState().inspection.duration>1.5);
   butterfly.update(.02,{activeSlot:'knife'});assert.equal(butterfly.getState().meleeStyle,'butterfly','style survives ordinary frames that omit the preference');
   butterfly.cancelInspect();advanceState(butterfly,.4,{activeSlot:'primary'});
   assert.equal(renderedScene(butterfly).getObjectByName('butterfly-weapon').visible,false,'switching to a gun hides both knife choices');
@@ -197,7 +197,7 @@ test('butterfly inspection articulates attached parts continuously and returns e
     const safeRest=[...safe.position.toArray(),...safe.rotation.toArray().slice(0,3)];
     const maxima=[0,0],minima=[0,0];let previous=jointAngles(view);
     assert.deepEqual(previous,[0,0]);assert.equal(view.inspect('knife'),true);
-    for(let seconds=0;seconds<3.2;seconds+=step){
+    for(let seconds=0;seconds<view.getState().inspection.duration+.4;seconds+=step){
       view.update(step,{activeSlot:'knife'});const angles=jointAngles(view);
       for(let i=0;i<2;i++){assert.ok(Number.isFinite(angles[i]));assert.ok(Math.abs(angles[i]-previous[i])<.7,'articulated joints must not snap between frames');maxima[i]=Math.max(maxima[i],angles[i]);minima[i]=Math.min(minima[i],angles[i]);}
       parts['butterfly-weapon'].traverse(node=>{for(const value of node.matrixWorld.elements)assert.ok(Number.isFinite(value),'rendered assembly stays finite');});
@@ -209,6 +209,148 @@ test('butterfly inspection articulates attached parts continuously and returns e
     assert.deepEqual(jointAngles(view),[0,0]);assert.deepEqual(poseValues(view),rest);
     assert.equal(view.getState().inspection.active,false);
     advanceState(view,.3,{activeSlot:'knife'});assert.deepEqual(jointAngles(view),[0,0]);assert.deepEqual(poseValues(view),rest);
+  }
+});
+
+function drawFixture(style='butterfly'){
+  const view=context.createViewModel(context.THREE);view.reset();view.update(0,{activeSlot:'primary',meleeStyle:style});
+  assert.equal(typeof view.equip,'function','explicit weapon selection queues its presentation before a render frame');
+  return view;
+}
+function beginDraw(view){
+  view.equip('knife');
+  assert.equal(view.getState().draw.pending,true,'draw is queued at the input event');
+  let elapsed=0;while(view.getState().activeSlot!=='knife'&&elapsed<.3){view.update(.005,{activeSlot:'knife'});elapsed+=.005;}
+  assert.equal(view.getState().activeSlot,'knife');assert.equal(view.getState().draw.active,true);
+  return view.getState().draw;
+}
+function noDraw(view,message){const state=view.getState().draw;assert.equal(state.active,false,message);assert.equal(state.pending,false,message);}
+
+test('butterfly equip starts folded, unfolds continuously at 30 and 144 Hz, then settles open',()=>{
+  for(const step of [1/30,1/144]){
+    const view=drawFixture(),draw=beginDraw(view),parts=butterflyParts(view);
+    assert.ok(draw.duration>=.4&&draw.duration<=1.5,'draw is a short presentation');
+    assert.ok(jointAngles(view).every(angle=>Math.abs(angle)>2),'first visible butterfly pose is folded');
+    assert.equal(parts['butterfly-weapon'].visible,true);
+    let previous=jointAngles(view),previousPose=poseValues(view),travel=0;
+    const safeRest=[...parts['butterfly-safe-handle'].position.toArray(),...parts['butterfly-safe-handle'].rotation.toArray().slice(0,3)];
+    for(let seconds=0;seconds<draw.duration+.3;seconds+=step){
+      view.update(step,{activeSlot:'knife'});const angles=jointAngles(view),pose=poseValues(view);
+      for(let axis=0;axis<2;axis++){
+        assert.ok(Number.isFinite(angles[axis]));
+        assert.ok(Math.abs(angles[axis]-previous[axis])<.7,'hinges follow a continuous draw rather than teleporting open');
+        travel+=Math.abs(angles[axis]-previous[axis]);
+      }
+      for(let axis=0;axis<6;axis++){
+        assert.ok(Number.isFinite(pose[axis]));
+        assert.ok(Math.abs(pose[axis]-previousPose[axis])<(axis<3?.09:.3),'hand follows a continuous draw arc');
+      }
+      parts['butterfly-weapon'].traverse(node=>{for(const value of node.matrixWorld.elements)assert.ok(Number.isFinite(value));});
+      assert.deepEqual([...parts['butterfly-safe-handle'].position.toArray(),...parts['butterfly-safe-handle'].rotation.toArray().slice(0,3)],safeRest,'safe handle stays attached to the grip');
+      previous=angles;previousPose=pose;
+    }
+    assert.ok(travel>5,'equip visibly works both hinges');noDraw(view,'draw naturally finishes');
+    assert.deepEqual(jointAngles(view),[0,0]);assert.deepEqual(poseValues(view),[.29,-.28,-.50,0,0,0]);
+    const ready=poseValues(view);advanceState(view,.5,{activeSlot:'knife'},step);assert.deepEqual(poseValues(view),ready,'finished draw remains exactly still');
+  }
+});
+
+test('butterfly pending and active draws cancel immediately and never restart from unchanged input state',()=>{
+  for(const elapsed of [0,.04,.3]){
+    const view=drawFixture();view.equip('knife');advanceState(view,elapsed,{activeSlot:'knife'});
+    assert.ok(view.getState().draw.active||view.getState().draw.pending);
+    view.cancelInspect();noDraw(view,'input/lifecycle cancellation also clears the queued draw');
+    assert.deepEqual(jointAngles(view),[0,0],'cancel restores open joints synchronously');
+    for(let frame=0;frame<180;frame++){view.update(1/120,{activeSlot:'knife'});noDraw(view,'the same slot must not resurrect the canceled draw');}
+    assert.deepEqual(jointAngles(view),[0,0]);assert.deepEqual(poseValues(view),[.29,-.28,-.50,0,0,0]);
+  }
+});
+
+test('butterfly draw pauses with game time and yields to Y without adding readiness time',()=>{
+  const view=drawFixture();beginDraw(view);advanceState(view,.2,{activeSlot:'knife'});
+  const paused=JSON.stringify(view.getState()),angles=jointAngles(view),pose=poseValues(view);
+  view.update(0,{activeSlot:'knife'});view.update(0,{activeSlot:'knife'});
+  assert.equal(JSON.stringify(view.getState()),paused);assert.deepEqual(jointAngles(view),angles);assert.deepEqual(poseValues(view),pose);
+  assert.ok(view.getState().draw.active,'draw still has cosmetic follow-through after ordinary switch readiness');
+  assert.equal(view.inspect('knife'),true,'Y can replace the remaining cosmetic draw');
+  noDraw(view,'inspection owns the assembly');assert.equal(view.getState().inspection.active,true);
+});
+
+test('light and heavy attacks immediately preempt pending or active butterfly draw with unchanged contact timing',()=>{
+  for(const mode of ['light','heavy'])for(const elapsed of [0,.3]){
+    const view=drawFixture();view.equip('knife');advanceState(view,elapsed,{activeSlot:'knife'});
+    view.shoot('knife',mode);noDraw(view,'attack clears pending and active draw');assert.deepEqual(jointAngles(view),[0,0]);
+    const hitTime=mode==='light'?.12:.28;view.update(.016,{activeSlot:'knife'});
+    assert.equal(view.getState().melee.elapsed,0);assert.equal(view.getState().melee.hitTime,hitTime);
+    advanceState(view,hitTime-.001,{activeSlot:'knife'});assert.equal(view.getState().melee.phase,'windup');
+    advanceState(view,.002,{activeSlot:'knife'});assert.equal(view.getState().melee.phase,'strike');
+    assert.deepEqual(jointAngles(view),[0,0],'contact uses an open blade');
+    advanceState(view,1.1,{activeSlot:'knife'});noDraw(view,'draw must not resume after the attack');
+  }
+});
+
+test('butterfly draw is one-shot per entry, survives rapid reselection, and does not affect classic knife',()=>{
+  const view=drawFixture();beginDraw(view);advanceState(view,.25,{activeSlot:'knife'});
+  const before=view.getState().draw.elapsed;view.equip('knife');assert.equal(view.getState().draw.elapsed,before,'same-slot input cannot restart an active draw');
+  assert.equal(view.getState().draw.pending,false);advanceState(view,1.5,{activeSlot:'knife'});
+  view.equip('knife');noDraw(view,'same-slot input cannot replay a completed draw');
+  view.equip('primary');advanceState(view,.4,{activeSlot:'primary'});
+  view.equip('knife');advanceState(view,.04,{activeSlot:'knife'});view.equip('primary');advanceState(view,.02,{activeSlot:'primary'});view.equip('knife');
+  let seenDraw=false;for(let frame=0;frame<180;frame++){view.update(1/120,{activeSlot:'knife'});seenDraw||=view.getState().draw.active;}
+  assert.equal(view.getState().activeSlot,'knife');assert.ok(seenDraw,'latest valid entry still draws');noDraw(view,'rapid reselection produces one finished draw');assert.deepEqual(jointAngles(view),[0,0]);
+  const classic=drawFixture('classic');classic.equip('knife');advanceState(classic,.4,{activeSlot:'knife'});noDraw(classic,'original knife retains its original switch presentation');
+  assert.equal(classic.inspect('knife'),true);assert.equal(classic.getState().inspection.duration,1.95);
+  const reset=drawFixture();reset.equip('knife');reset.reset();advanceState(reset,.5,{activeSlot:'primary'});noDraw(reset,'reset clears an unconsumed draw');
+});
+
+test('state-driven butterfly selection also starts once and cancellation suppresses later frames',()=>{
+  const view=drawFixture();view.update(.02,{activeSlot:'knife'});assert.ok(view.getState().draw.pending||view.getState().draw.active);
+  view.cancelInspect();for(let frame=0;frame<180;frame++){view.update(1/120,{activeSlot:'knife'});noDraw(view,'fallback state cannot restart canceled draw');}
+  advanceState(view,.4,{activeSlot:'primary'});advanceState(view,.15,{activeSlot:'knife'});
+  assert.ok(view.getState().draw.active,'a genuinely new state-driven entry may draw again');
+});
+
+test('returning to a still-visible butterfly consumes the pending draw instead of leaving it stuck',()=>{
+  const view=butterflyFixture();noDraw(view,'begin with a fully settled knife');
+  view.equip('primary');advanceState(view,.04,{activeSlot:'primary'});
+  assert.equal(view.getState().activeSlot,'knife','the old knife is still visible during its lowering phase');
+  view.equip('knife');assert.equal(view.getState().draw.pending,true);
+  view.update(.01,{activeSlot:'knife'});
+  assert.equal(view.getState().draw.active,true,'valid return to the visible knife starts the new draw');
+  assert.equal(view.getState().draw.pending,false,'draw request is consumed even without a visible slot change');
+  assert.ok(jointAngles(view).every(angle=>Math.abs(angle)>2),'the restarted entry presents its closed butterfly');
+  advanceState(view,view.getState().draw.duration+.4,{activeSlot:'knife'});
+  noDraw(view,'rapid return finishes without a permanent pending draw');assert.deepEqual(jointAngles(view),[0,0]);
+  assert.deepEqual(poseValues(view),[.29,-.28,-.50,0,0,0]);
+});
+
+test('butterfly rollover world transforms remain continuous through a full turn and the ready-pose reset',()=>{
+  for(const step of [1/30,1/144]){
+    const view=butterflyFixture(),scene=renderedScene(view);
+    const parts=['butterfly-roll','butterfly-safe-handle','butterfly-blade-carrier','butterfly-free-handle'].map(name=>{const part=scene.getObjectByName(name);assert.ok(part,name+' exists');return part;});
+    const rest=parts.map(part=>part.matrixWorld.elements.slice());
+    const previous=parts.map(part=>({rotation:part.getWorldQuaternion(new context.THREE.Quaternion()),position:part.getWorldPosition(new context.THREE.Vector3())}));
+    const rotation=new context.THREE.Quaternion(),position=new context.THREE.Vector3();
+    assert.equal(view.inspect('knife'),true);const duration=view.getState().inspection.duration;
+    let completed=false,minRoll=0,maxRoll=0;
+    for(let elapsed=0;elapsed<duration+.2;elapsed+=step){
+      const wasActive=view.getState().inspection.active;view.update(step,{activeSlot:'knife'});scene.updateMatrixWorld(true);
+      const justCompleted=wasActive&&!view.getState().inspection.active;completed||=justCompleted;
+      minRoll=Math.min(minRoll,parts[0].rotation.z);maxRoll=Math.max(maxRoll,parts[0].rotation.z);
+      parts.forEach((part,index)=>{
+        part.getWorldQuaternion(rotation);part.getWorldPosition(position);
+        const angle=previous[index].rotation.angleTo(rotation),distance=previous[index].position.distanceTo(position);
+        assert.ok(angle<.7*step*30,part.name+' world orientation follows a continuous arc');
+        assert.ok(distance<.09*step*30,part.name+' world position does not teleport');
+        if(justCompleted){assert.ok(angle<.02,'canonical angle reset cannot snap the rendered knife');assert.ok(distance<.01,'completion preserves the final catch position');}
+        for(const value of part.matrixWorld.elements)assert.ok(Number.isFinite(value));
+        previous[index].rotation.copy(rotation);previous[index].position.copy(position);
+      });
+    }
+    assert.ok(maxRoll-minRoll>5.5,'the test exercises a full index rollover, not only wrist motion');
+    assert.ok(completed,'the samples include the exact end transition');
+    parts.forEach((part,index)=>part.matrixWorld.elements.forEach((value,axis)=>near(value,rest[index][axis],1e-9)));
+    assert.equal(view.getState().inspection.active,false);
   }
 });
 
