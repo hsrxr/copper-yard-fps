@@ -2,7 +2,7 @@
 from pathlib import Path
 import hashlib
 root=Path(__file__).resolve().parent
-files=['vendor/three-r160.min.js','src/random.js','src/arena.js','src/atmosphere.js','src/post.js','src/display.js','src/combat.js','src/mission.js','src/career.js','src/player.js','src/enemies.js','src/effects.js','src/minimap.js','src/hud.js','src/viewmodel.js','src/app.js']
+files=['vendor/three-r160.min.js','src/random.js','src/arena.js','src/atmosphere.js','src/post.js','src/display.js','src/combat.js','src/mission.js','src/career.js','src/player.js','src/enemies.js','src/effects.js','src/minimap.js','src/hud.js','src/viewmodel.js','src/fullscreen.js','src/app.js']
 parts=[]
 for name in files:
     code=(root/name).read_text(encoding='utf-8')

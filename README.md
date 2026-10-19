@@ -12,6 +12,8 @@
 
 使用支持 WebGL2 的桌面 Chrome 或 Edge，搭配键盘、鼠标。进入游戏后会捕获鼠标；按 Esc 暂停并释放鼠标。
 
+主菜单右上角与暂停页均提供“进入全屏 / 退出全屏”按钮。全屏同时显示游戏和界面，减少浏览器边框干扰；退出全屏时会暂停正在进行的战斗。切换后画面自动适配窗口，保留当前画质和渲染分辨率设置。
+
 离线游玩时，下载仓库后直接打开 **`index.html`** 即可。
 
 也可以通过本地服务运行：
@@ -79,6 +81,7 @@ node --test qa/*.test.cjs
 ```sh
 npm ci
 npm run test:browser
+npm run test:fullscreen
 ```
 
 验收默认尝试已安装的 Chrome，必要时可用 `COPPER_BROWSER` 指定浏览器可执行文件，或用 `COPPER_BROWSER_CHANNEL` 指定 Playwright 通道。也可以先运行 `npx playwright install chromium` 安装测试浏览器。测试结果与截图写入 `qa/artifacts/`，不会作为源码提交。

@@ -9,10 +9,10 @@ const out=path.join(__dirname,'artifacts');
  let browser;
  try{
   const html=bytes.toString('utf8'),sources=[...html.matchAll(/<script>\n\/\* Embedded source: ([^\n]+) \*\/\n([\s\S]*?)\n<\/script>/g)];
-  assert.equal(sources.length,16);
+  assert.equal(sources.length,17);
   for(const [,name,source]of sources)assert.equal(source,fs.readFileSync(path.join(root,name),'utf8').replace(/\r\n/g,'\n').replace(/<\/script/g,'<\\/script'),name);
   assert.ok(html.includes(fs.readFileSync(path.join(root,'vendor/THREE-LICENSE.txt'),'utf8').replace(/\r\n/g,'\n')));
-  report.checks.push({name:'16 embedded scripts match final source and inline Three license is present',status:'PASS'});
+  report.checks.push({name:'17 embedded scripts match final source and inline Three license is present',status:'PASS'});
   const options={headless:true,args:['--enable-webgl','--ignore-gpu-blocklist']};
   if(process.env.COPPER_BROWSER)browser=await chromium.launch({...options,executablePath:process.env.COPPER_BROWSER});
   else if(process.env.COPPER_BROWSER_CHANNEL)browser=await chromium.launch({...options,channel:process.env.COPPER_BROWSER_CHANNEL});
